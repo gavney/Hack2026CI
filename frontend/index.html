@@ -3106,10 +3106,8 @@
             </div>
           </div>
         </div>
-          </div>
-        </div>
 
-        <!-- ================= TAB 4: ОРИГИНАЛЬНЫЙ БЛАНК ФНС (ПРЕВЬЮ A4) ================= -->
+        <!-- ================= TAB 5: ОРИГИНАЛЬНЫЙ БЛАНК ФНС (ПРЕВЬЮ A4) ================= -->
         <div id="declTabPreviewPanel" class="hidden space-y-4">
           <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 flex items-center justify-between">
             <div class="flex items-center space-x-2">
@@ -3124,9 +3122,11 @@
             </div>
           </div>
 
-          <!-- Document Render Area (Printable) -->
-          <div id="fnsPrintArea" class="flex flex-col items-center">
-            <!-- Pages 1, 2, 3 dynamically injected by renderTaxDeclarationPreview() -->
+          <!-- Document Render Area (Printable) with horizontal scroll containment -->
+          <div class="w-full overflow-x-auto pb-4 flex justify-center">
+            <div id="fnsPrintArea" class="flex flex-col items-center">
+              <!-- Pages 1, 2, 3, 4 dynamically injected by renderTaxDeclarationPreview() -->
+            </div>
           </div>
         </div>
 

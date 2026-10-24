@@ -5024,9 +5024,19 @@ async function renderFnsTaxesSubTab() {
 
   container.innerHTML = taxEvents.map(ev => {
     const absAmt = Math.abs(ev.amount || 0);
-    const isNotice = absAmt === 0 || (ev.title && ev.title.toLowerCase().includes('уведомлен'));
-    const isDeclaration = ev.title && ev.title.toLowerCase().includes('декларац');
-    const isNds = ev.title && ev.title.includes('НДС');
+
+    let eventTitle = ev.title;
+    if (!eventTitle && ev.note) {
+      const cleanNote = ev.note.replace(/^Налоги по УСН\/НДС\s*\|\s*/, '');
+      eventTitle = cleanNote.split('(')[0].trim() || cleanNote;
+    }
+    if (!eventTitle) {
+      eventTitle = ev.counterparty_name || 'Налоговое обязательство';
+    }
+
+    const isNotice = absAmt === 0 || eventTitle.toLowerCase().includes('уведомлен');
+    const isDeclaration = eventTitle.toLowerCase().includes('декларац');
+    const isNds = eventTitle.includes('НДС');
 
     // Parse note for details
     let noteText = ev.note || '';
@@ -5042,7 +5052,7 @@ async function renderFnsTaxesSubTab() {
           </div>
           <div>
             <div class="flex items-center space-x-2 flex-wrap gap-y-1">
-              <span class="text-xs font-black text-slate-900">${ev.title}</span>
+              <span class="text-xs font-black text-slate-900">${eventTitle}</span>
               <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 flex items-center space-x-1 shadow-2xs">
                 <i data-lucide="landmark" class="w-3 h-3 text-purple-700"></i>
                 <span>Налоги по УСН/НДС</span>
