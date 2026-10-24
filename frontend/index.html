@@ -1,0 +1,2595 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Кассовый радар | Банк «Центр-инвест»</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ci: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              accent: '#00A859'
+            }
+          },
+          fontFamily: {
+            sans: ['Manrope', 'system-ui', 'sans-serif'],
+            display: ['Plus Jakarta Sans', 'Manrope', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Manrope', sans-serif;
+      background-color: #F8FAFC;
+    }
+    .wallet-header-bg {
+      background: linear-gradient(180deg, #059669 0%, #047857 100%);
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .card-shadow {
+      box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+    }
+    .pill-active {
+      background-color: #059669;
+      color: #FFFFFF;
+      font-weight: 700;
+    }
+    .pill-inactive {
+      background-color: #F1F5F9;
+      color: #64748B;
+      font-weight: 600;
+    }
+    .pill-inactive:hover {
+      background-color: #E2E8F0;
+      color: #1E293B;
+    }
+    .cab-sub-active {
+      background-color: #059669;
+      color: #FFFFFF;
+      font-weight: 700;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    }
+    .cab-sub-inactive {
+      background-color: transparent;
+      color: #64748B;
+      font-weight: 600;
+    }
+    .cab-sub-inactive:hover {
+      background-color: #E2E8F0;
+      color: #0F172A;
+    }
+    #companySelect option {
+      color: #0f172a !important;
+      background-color: #ffffff !important;
+    }
+  </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- TOP EMERALD WALLET BANNER -->
+  <header class="wallet-header-bg text-white pb-6 pt-4 px-4 sm:px-6 lg:px-8 rounded-b-[2rem] shadow-md">
+    <div class="max-w-6xl mx-auto">
+      
+      <!-- Top Bar: Logo, Company Picker, Profile -->
+      <div class="flex items-center justify-between gap-3 mb-5">
+        <!-- Logo -->
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <span class="font-display font-extrabold text-base tracking-tight leading-none block">Центр-инвест</span>
+            <span class="text-[10px] text-emerald-100 uppercase tracking-wider font-semibold">Кассовый радар</span>
+          </div>
+        </div>
+
+        <!-- Company Dropdown Selector & Multi-business Controls -->
+        <div class="flex-1 max-w-md mx-2">
+          <div class="relative flex items-center space-x-1.5">
+            <div class="relative flex-grow">
+              <select id="companySelect" onchange="onCompanyChange(this.value)" class="w-full bg-white/15 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold rounded-xl px-3 py-2 pr-8 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 appearance-none cursor-pointer truncate">
+                <!-- Populated dynamically -->
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white/70">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <!-- Quick Add Business Button -->
+            <button onclick="openAddBusinessModal()" title="Добавить бизнес в аккаунт" class="shrink-0 px-2.5 py-2 rounded-xl bg-white/15 hover:bg-white/30 text-white border border-white/20 transition flex items-center space-x-1 text-xs font-bold shadow-xs">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">+ Бизнес</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Notification & User Cabinet / Auth Group -->
+        <div class="flex items-center space-x-2">
+          <button onclick="switchTab('breakdown')" title="Уведомления" class="relative p-2 rounded-xl bg-white/15 hover:bg-white/20 text-white transition">
+            <i data-lucide="bell" class="w-4 h-4"></i>
+            <span id="alertBadge" class="hidden absolute top-1 right-1 w-2.5 h-2.5 bg-red-400 rounded-full ring-2 ring-emerald-700 animate-pulse"></span>
+          </button>
+
+          <!-- Logged In Controls Group -->
+          <div id="userLoggedInGroup" class="hidden flex items-center space-x-1.5">
+            <!-- User Cabinet Trigger Pill -->
+            <button onclick="switchTab('cabinet')" title="Личный кабинет бизнеса" class="flex items-center space-x-2 bg-white/15 hover:bg-white/25 border border-white/20 rounded-xl px-2.5 py-1.5 transition">
+              <div id="userAvatarInitials" class="w-6 h-6 rounded-lg bg-white text-emerald-800 flex items-center justify-center font-extrabold text-[11px]">
+                ИС
+              </div>
+              <div class="hidden sm:block text-left text-xs leading-tight">
+                <div id="headerUserName" class="font-bold truncate max-w-[120px]">Иван Смирнов</div>
+                <div id="headerUserRole" class="text-[10px] text-emerald-100">Кабинет</div>
+              </div>
+            </button>
+
+            <!-- Prominent Logout Button in Header -->
+            <button onclick="handleLogout()" id="btnLogoutHeader" title="Выйти из аккаунта" class="flex items-center space-x-1.5 bg-red-500/80 hover:bg-red-600 text-white border border-red-400/40 rounded-xl px-2.5 py-1.5 transition text-xs font-bold shadow-sm">
+              <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+              <span class="hidden md:inline">Выйти</span>
+            </button>
+          </div>
+
+          <!-- Logged Out / Guest Controls Group -->
+          <div id="userLoggedOutGroup" class="flex items-center space-x-2">
+            <button onclick="openAuthModal('login')" class="text-xs bg-white text-emerald-800 font-extrabold px-3 py-1.5 rounded-xl transition hover:bg-emerald-50 shadow-sm flex items-center space-x-1.5">
+              <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+              <span>Войти</span>
+            </button>
+            <button onclick="openAuthModal('register')" class="text-xs bg-white/20 hover:bg-white/30 text-white font-extrabold px-3 py-1.5 rounded-xl transition border border-white/30 flex items-center space-x-1.5">
+              <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">Регистрация</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLEEK WALLET CARDS ROW -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
+        
+        <!-- Card 1: Main Business Account -->
+        <div class="bg-white text-slate-800 rounded-2xl p-4 card-shadow flex flex-col justify-between h-32 transition-transform hover:-translate-y-0.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <div class="w-7 h-7 rounded-lg bg-emerald-100 text-ci-700 flex items-center justify-center">
+                <i data-lucide="wallet" class="w-4 h-4"></i>
+              </div>
+              <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Текущий остаток</span>
+            </div>
+            <div class="flex items-center space-x-1.5">
+              <span id="cardLegalForm" class="text-[10px] font-extrabold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">ИП</span>
+              <button onclick="openEditBalanceModal()" title="Изменить текущий остаток" class="text-slate-400 hover:text-emerald-700 p-1 hover:bg-emerald-50 rounded-lg transition cursor-pointer">
+                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+          <div>
+            <div id="cardCurrentBalance" onclick="openEditBalanceModal()" title="Нажмите для изменения остатка" class="text-2xl font-black text-slate-900 tracking-tight font-display cursor-pointer hover:text-emerald-700 transition">... ₽</div>
+            <div class="flex items-center justify-between text-[11px] text-slate-400 mt-0.5 font-medium">
+              <span id="cardAccountNumber">Основной счет</span>
+              <span id="cardBalanceAsOfDate" class="text-slate-500 font-medium">По выписке</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Liquidity Radar Traffic Light -->
+        <div id="radarStatusCard" class="bg-white text-slate-800 rounded-2xl p-4 card-shadow flex flex-col justify-between h-32 transition-transform hover:-translate-y-0.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span id="statusTrafficIcon" class="w-3 h-3 rounded-full bg-emerald-500"></span>
+              <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Статус радара</span>
+            </div>
+            <span id="statusRiskProb" class="text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full">
+              Риск 0%
+            </span>
+          </div>
+          <div>
+            <div id="statusHeadline" class="text-lg font-black text-slate-900 tracking-tight leading-tight">Всё спокойно</div>
+            <p id="statusDescription" class="text-[11px] text-slate-500 mt-0.5 truncate">
+              Денег хватает на горизонте 30 дней.
+            </p>
+          </div>
+          <div class="text-right">
+            <button onclick="switchTab('breakdown')" id="btnAnalyzeRisk" class="text-[11px] font-extrabold text-ci-600 hover:text-ci-800 inline-flex items-center space-x-0.5">
+              <span>Подробнее</span>
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Card 3: Upcoming Key Obligation -->
+        <div class="bg-white text-slate-800 rounded-2xl p-4 card-shadow flex flex-col justify-between h-32 transition-transform hover:-translate-y-0.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                <i data-lucide="calendar" class="w-4 h-4"></i>
+              </div>
+              <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Ближайший платеж</span>
+            </div>
+            <span class="text-[10px] font-extrabold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">График</span>
+          </div>
+          <div>
+            <div id="nextPaymentAmount" class="text-xl font-black text-slate-900 tracking-tight font-display">225 983 ₽</div>
+            <div id="nextPaymentDesc" class="text-[11px] text-slate-500 mt-0.5 truncate">28 число • ЕНП Налоги</div>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-400">
+            <span>Режим расчетов:</span>
+            <span id="cardTaxRegimeBadge" class="text-slate-700 font-extrabold">УСН</span>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- QUICK ACTION PILLS (Under Header) -->
+  <div class="max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 -mt-2">
+    <div class="flex items-center justify-between bg-white rounded-2xl p-2.5 card-shadow border border-slate-100 gap-2 flex-wrap">
+      
+      <!-- Action buttons -->
+      <div class="flex items-center space-x-2">
+        <button onclick="openAddEventModal('inflow')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center space-x-1.5 shadow-sm transition">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Жду оплату</span>
+        </button>
+        <button onclick="openAddEventModal('outflow')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition">
+          <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+          <span>Заплачу</span>
+        </button>
+        <button onclick="openCabinetModal('statement')" class="bg-ci-50 hover:bg-ci-100 text-ci-700 border border-ci-200 font-bold text-xs px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+          <span>Загрузить CSV</span>
+        </button>
+      </div>
+
+      <!-- Navigation Pills -->
+      <nav id="topNavPills" class="flex items-center space-x-1.5 overflow-x-auto hide-scrollbar py-1 text-xs">
+        <button onclick="switchTab('radar')" id="pill-radar" class="pill-active px-3.5 py-1.5 rounded-xl transition">
+          Радар
+        </button>
+        <button onclick="switchTab('breakdown')" id="pill-breakdown" class="pill-inactive px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1">
+          <span>Разбор</span>
+          <span id="tabAlertCount" class="hidden text-[10px] bg-red-500 text-white px-1.5 py-0.2 rounded-full font-bold">1</span>
+        </button>
+        <button onclick="switchTab('scenarios')" id="pill-scenarios" class="pill-inactive px-3.5 py-1.5 rounded-xl transition">
+          Сценарии
+        </button>
+        <button onclick="switchTab('operations')" id="pill-operations" class="pill-inactive px-3.5 py-1.5 rounded-xl transition">
+          Операции
+        </button>
+        <button onclick="switchTab('planfact')" id="pill-planfact" class="pill-inactive px-3.5 py-1.5 rounded-xl transition hidden">
+          Слоты
+        </button>
+        <button onclick="switchTab('analytics')" id="pill-analytics" class="pill-inactive px-3.5 py-1.5 rounded-xl transition hidden">
+          ДДС
+        </button>
+        <button onclick="switchTab('integrations')" id="pill-integrations" class="pill-inactive px-3.5 py-1.5 rounded-xl transition hidden">
+          1С / ФНС
+        </button>
+        <button onclick="switchTab('counterparties')" id="pill-counterparties" class="pill-inactive px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-500"></i>
+          <span>Контрагенты ФНС</span>
+          <span id="counterpartyRiskBadge" class="hidden text-[10px] bg-red-500 text-white px-1.5 py-0.2 rounded-full font-bold">!</span>
+        </button>
+        <button onclick="switchTab('cabinet')" id="pill-cabinet" class="pill-inactive px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1.5 text-ci-700 font-bold">
+          <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+          <span>Кабинет</span>
+        </button>
+      </nav>
+
+    </div>
+  </div>
+
+  <!-- MAIN BODY CONTAINER -->
+  <main class="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+
+    <!-- ================= CLEAN BUSINESS ONBOARDING BANNER ================= -->
+    <!-- Displayed when company.has_statement == false -->
+    <div id="cleanBusinessBanner" class="hidden p-4 rounded-2xl bg-amber-50 border border-amber-200 text-slate-800 card-shadow flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <div class="text-xs font-black text-amber-950">Новый расчетный счет: выписка не загружена</div>
+          <div class="text-[11px] text-amber-800">Загрузите файл выписки (CSV или 1CClientBankExchange) для формирования календаря и графика остатков</div>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 text-xs">
+        <button onclick="openCabinetModal('statement')" class="bg-ci-600 hover:bg-ci-700 text-white font-bold px-3 py-1.5 rounded-xl transition flex items-center space-x-1.5 shadow-sm">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+          <span>Загрузить CSV</span>
+        </button>
+        <button onclick="loadDemoStatement('C001')" class="bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2.5 py-1.5 rounded-xl transition">
+          Демо C001
+        </button>
+        <button onclick="loadDemoStatement('C004')" class="bg-white hover:bg-red-50 text-red-800 border border-red-200 font-bold px-2.5 py-1.5 rounded-xl transition">
+          Демо C004
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= TAB: RADAR & FORECAST ================= -->
+    <div id="tabContentRadar" class="space-y-5">
+      
+      <!-- CRITICAL ALERT CALLOUT (Only shows when risk exists) -->
+      <div id="radarCriticalBanner" class="hidden p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 card-shadow flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-red-500 text-white flex items-center justify-center shrink-0">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div id="bannerAlertTitle" class="text-sm font-black">Обнаружен риск кассового разрыва!</div>
+            <div id="bannerAlertText" class="text-xs text-red-700 mt-0.5">...</div>
+          </div>
+        </div>
+        <button onclick="switchTab('breakdown')" class="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shrink-0 ml-3">
+          Как устранить
+        </button>
+      </div>
+
+      <!-- FNS RISK ALERT CALLOUT (Shows when counterparty nalogbi account blocks affect forecast) -->
+      <div id="radarFnsRiskBanner" class="hidden p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 card-shadow flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+            <i data-lucide="shield-alert" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="text-sm font-black flex items-center space-x-2">
+              <span>Учтен фактор риска ФНС (nalogbi)</span>
+              <span class="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">ст. 76 НК РФ</span>
+            </div>
+            <div id="radarFnsRiskText" class="text-xs text-amber-800 mt-0.5">...</div>
+          </div>
+        </div>
+        <button onclick="switchTab('counterparties')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shrink-0 ml-3">
+          Контрагенты ФНС
+        </button>
+      </div>
+
+      <!-- MAIN CHART CARD -->
+      <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+        
+        <!-- Controls Bar -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4 flex-wrap gap-2">
+          <div>
+            <h2 class="text-base font-extrabold text-slate-900 tracking-tight font-display">Прогноз остатка</h2>
+            <p class="text-xs text-slate-400">Медианная траектория и коридор неопределенности P10–P90</p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <!-- Horizon Selector -->
+            <div class="flex items-center space-x-1.5 text-xs font-bold text-slate-500">
+              <span>Период:</span>
+              <div class="inline-flex bg-slate-100 p-1 rounded-xl">
+                <button onclick="setHorizon(30)" id="hz-btn-30" class="px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition">30 дн</button>
+                <button onclick="setHorizon(60)" id="hz-btn-60" class="px-3 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition">60 дн</button>
+                <button onclick="setHorizon(90)" id="hz-btn-90" class="px-3 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition">90 дн</button>
+              </div>
+            </div>
+
+            <!-- Hidden container to preserve JS elements without visual clutter -->
+            <div class="hidden">
+              <div id="modelSwitcher">
+                <button id="model-btn-mc"></button>
+                <button id="model-btn-stub"></button>
+              </div>
+              <input type="checkbox" id="debugModeToggle">
+              <div id="debugBanner">
+                <span id="debugModelLabel"></span>
+                <span id="debugIterations"></span>
+                <span id="debugExecTime"></span>
+                <span id="debugVaR"></span>
+                <span id="debugCVaR"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Canvas -->
+        <div class="relative w-full" style="height: 340px;">
+          <canvas id="forecastChart"></canvas>
+        </div>
+
+        <!-- Legend -->
+        <div class="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
+          <div class="flex items-center space-x-4">
+            <span class="inline-flex items-center space-x-1.5">
+              <span class="w-3 h-0.5 bg-emerald-600"></span>
+              <span class="font-semibold text-slate-700">Ожидаемый остаток</span>
+            </span>
+            <span class="inline-flex items-center space-x-1.5">
+              <span class="w-3 h-3 rounded bg-emerald-100"></span>
+              <span class="font-semibold text-slate-700">Коридор P10–P90</span>
+            </span>
+            <span class="inline-flex items-center space-x-1.5">
+              <span class="w-3 h-0.5 bg-red-500 border-t border-dashed border-red-500"></span>
+              <span class="font-semibold text-red-600">Граница разрыва (0 ₽)</span>
+            </span>
+            <span id="debugLegendPaths" class="hidden inline-flex items-center space-x-1.5">
+              <span class="w-3 h-0.5 bg-amber-400 opacity-60" style="border-top: 1px dashed"></span>
+              <span class="font-semibold text-amber-600">Симуляции MC</span>
+            </span>
+          </div>
+          <span class="text-slate-400">Модель: <b id="modelTagLabel">monte-carlo-v1.0</b></span>
+        </div>
+
+      </div>
+
+      <!-- KEY SCHEDULED EVENTS STRIP -->
+      <div class="bg-white rounded-2xl p-4 card-shadow border border-slate-100">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-2.5">
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
+            <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-ci-600"></i>
+            <span>Ключевые события в прогнозе</span>
+          </div>
+          <!-- Sorting & Action buttons -->
+          <div class="flex items-center space-x-1.5 overflow-x-auto text-[11px] font-bold">
+            <button onclick="sortKeyEvents('nearest')" id="evSort-nearest" class="bg-ci-600 text-white px-2.5 py-1 rounded-lg transition shadow-sm">
+              Ближайшие
+            </button>
+            <button onclick="sortKeyEvents('largest')" id="evSort-largest" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-lg transition">
+              Самые крупные
+            </button>
+            <button onclick="sortKeyEvents('outflow')" id="evSort-outflow" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-lg transition">
+              Списания (-)
+            </button>
+            <button onclick="sortKeyEvents('inflow')" id="evSort-inflow" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-lg transition">
+              Доходы (+)
+            </button>
+            <button onclick="openAddEventModal('outflow')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg transition shadow-sm flex items-center space-x-1">
+              <i data-lucide="plus" class="w-3 h-3"></i>
+              <span>Событие</span>
+            </button>
+          </div>
+        </div>
+        <div id="contributionsList" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================= TAB: BREAKDOWN ("Почему / Сколько / Что делать") ================= -->
+    <div id="tabContentBreakdown" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+        
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-black text-slate-900 font-display">Разбор кассового разрыва</h2>
+            <p class="text-xs text-slate-400">Причина дефицита денег и конкретные шаги для его закрытия</p>
+          </div>
+          <span id="breakdownAlertLevel" class="px-3 py-1 bg-amber-100 text-amber-900 rounded-full font-bold text-xs uppercase">
+            Внимание
+          </span>
+        </div>
+
+        <div id="breakdownAlertBox" class="p-4 rounded-xl bg-slate-50 border border-slate-200 mb-5 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+            <div id="breakdownAlertTitle" class="text-sm font-black text-slate-900">Кассовый разрыв</div>
+            <span id="breakdownGapSummaryTag" class="text-xs font-black text-red-700 bg-red-100 px-2 py-0.5 rounded-full">Требует внимания</span>
+          </div>
+          
+          <!-- Key Metrics Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 bg-white rounded-xl border border-slate-200">
+              <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Сумма дефицита</span>
+              <div id="breakdownMetricAmount" class="text-base font-black text-red-600 font-display">0 ₽</div>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-slate-200">
+              <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Дата просадки</span>
+              <div id="breakdownMetricDate" class="text-sm font-bold text-slate-900">...</div>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-slate-200">
+              <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Длительность</span>
+              <div id="breakdownMetricDuration" class="text-sm font-bold text-slate-900">...</div>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-slate-200">
+              <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Причина</span>
+              <div id="breakdownMetricFactor" class="text-xs font-bold text-slate-800 truncate">...</div>
+            </div>
+          </div>
+
+          <p id="breakdownAlertText" class="text-xs text-slate-600 leading-relaxed font-medium">...</p>
+        </div>
+
+        <!-- 3 Step Actions -->
+        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+          3 шага для предотвращения разрыва
+        </div>
+        <div id="breakdownActionsList" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <!-- Populated dynamically -->
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================= TAB: SCENARIOS ================= -->
+    <div id="tabContentScenarios" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+        
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <h2 class="text-lg font-black text-slate-900 font-display">Стресс-сценарии «Что если»</h2>
+            <p class="text-xs text-slate-400">Сравнение базового прогноза со стресс-ситуацией на одном графике</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <!-- Horizon pills: 14, 30, 60, 90 days -->
+            <div class="flex bg-slate-100 p-1 rounded-xl text-[11px] font-bold">
+              <button onclick="setScenarioHorizon(14)" id="btn-scen-h-14" class="px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition">14 дн</button>
+              <button onclick="setScenarioHorizon(30)" id="btn-scen-h-30" class="px-2.5 py-1 rounded-lg bg-white text-emerald-800 shadow-xs font-black transition">30 дн</button>
+              <button onclick="setScenarioHorizon(60)" id="btn-scen-h-60" class="px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition">60 дн</button>
+              <button onclick="setScenarioHorizon(90)" id="btn-scen-h-90" class="px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition">90 дн</button>
+            </div>
+            <!-- Custom scenario button -->
+            <button onclick="openCustomScenarioModal()" class="flex items-center space-x-1 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-200 transition">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Свой сценарий</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Scenario Pills -->
+        <div id="scenarioCardsContainer" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <button onclick="selectScenario('scen_delay_client')" id="card-scen-delay" class="p-3 rounded-xl border-2 border-ci-600 bg-emerald-50/80 text-left transition shadow-xs">
+            <div class="text-[10px] font-bold text-ci-800">Клиент задержит</div>
+            <div id="badge-scen-delay" class="font-extrabold text-xs text-slate-900 mt-0.5">+14 дней</div>
+          </button>
+          <button onclick="selectScenario('scen_rev_drop_20')" id="card-scen-drop" class="p-3 rounded-xl border border-slate-200 bg-white text-left transition hover:border-slate-300">
+            <div class="text-[10px] font-bold text-slate-400">Спад выручки</div>
+            <div id="badge-scen-drop" class="font-extrabold text-xs text-slate-900 mt-0.5">-20% продаж</div>
+          </button>
+          <button onclick="selectScenario('scen_unexp_expense')" id="card-scen-expense" class="p-3 rounded-xl border border-slate-200 bg-white text-left transition hover:border-slate-300">
+            <div class="text-[10px] font-bold text-slate-400">Внеплановый расход</div>
+            <div id="badge-scen-expense" class="font-extrabold text-xs text-slate-900 mt-0.5">-250 000 ₽</div>
+          </button>
+          <button onclick="selectScenario('scen_cost_hike_15')" id="card-scen-cost" class="p-3 rounded-xl border border-slate-200 bg-white text-left transition hover:border-slate-300">
+            <div class="text-[10px] font-bold text-slate-400">Рост расходов</div>
+            <div id="badge-scen-cost" class="font-extrabold text-xs text-slate-900 mt-0.5">+15% затрат</div>
+          </button>
+        </div>
+
+        <!-- Interactive Scenario Parameter Editor -->
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl mb-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <div class="w-6 h-6 rounded-lg bg-ci-100 text-ci-800 flex items-center justify-center">
+                <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+              </div>
+              <span class="text-xs font-black text-slate-800">Параметры стресс-модели: <span id="activeScenarioTitle" class="text-ci-700">Задержка оплаты дебитора</span></span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button onclick="cancelScenario()" id="btnCancelScenario" class="text-[11px] font-bold text-slate-600 hover:text-red-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs hover:bg-red-50 hover:border-red-200 transition flex items-center space-x-1">
+                <i data-lucide="x-circle" class="w-3.5 h-3.5 text-slate-400"></i>
+                <span>Отменить сценарий</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="scenarioEditorControls" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <div class="relative w-full" style="height: 310px;">
+          <canvas id="scenarioComparisonChart"></canvas>
+        </div>
+
+        <div id="scenarioDeltaBox" class="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          <!-- Populated -->
+        </div>
+
+        <div id="scenarioActionBox" class="mt-3 p-3 rounded-xl border border-slate-200 bg-slate-50/80 flex items-center justify-between text-xs">
+          <!-- Populated -->
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================= TAB: OPERATIONS ================= -->
+    <div id="tabContentOperations" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+        
+        <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <div>
+            <h2 class="text-lg font-black text-slate-900 font-display">Операции по счету</h2>
+            <p class="text-xs text-slate-400">Разметка категорий, поиск и память правил</p>
+          </div>
+          <div class="flex items-center space-x-2 flex-wrap gap-2">
+            <!-- Quick Search Input -->
+            <div class="relative w-48 sm:w-64">
+              <input type="text" id="opSearchInput" oninput="onOpSearchInput(this.value)" placeholder="Поиск по контрагенту..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-ci-500 font-medium">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400">
+                <i data-lucide="search" class="w-3.5 h-3.5"></i>
+              </div>
+            </div>
+            <!-- Marketplace Sorting & Filters Button -->
+            <button onclick="openMarketplaceSortModal()" class="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3 py-1.5 rounded-xl transition border border-slate-200">
+              <i data-lucide="arrow-down-up" class="w-3.5 h-3.5 text-ci-600"></i>
+              <span id="marketSortButtonLabel">Сортировка</span>
+              <span id="marketFilterCountBadge" class="hidden text-[10px] bg-ci-600 text-white rounded-full px-1.5 py-0.2 font-extrabold">0</span>
+            </button>
+            <button onclick="downloadTaxDeclaration()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold px-2.5 py-1.5 rounded-xl transition flex items-center space-x-1 shadow-sm">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">Для декларации</span>
+            </button>
+            <button onclick="downloadOperationsCSV()" title="Скачать CSV выписки" class="text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 p-2 rounded-xl transition">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Active Filter Pills Bar (Marketplace style) -->
+        <div id="activeMarketFiltersBar" class="hidden flex items-center flex-wrap gap-1.5 pb-2 text-xs">
+          <!-- Populated dynamically -->
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-100 text-left text-xs">
+            <thead class="text-slate-400 font-bold uppercase text-[10px]">
+              <tr>
+                <th class="py-2 px-2">Дата</th>
+                <th class="py-2 px-2">Сумма</th>
+                <th class="py-2 px-2">Контрагент</th>
+                <th class="py-2 px-2">Категория</th>
+                <th class="py-2 px-2 text-right">Правка</th>
+              </tr>
+            </thead>
+            <tbody id="operationsTableBody" class="divide-y divide-slate-100 text-slate-700">
+              <!-- Populated -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Slots, Analytics (DDS), Integrations (1C/FNS) moved into Cabinet (tabContentCabinet) to unclutter the interface -->
+
+    <!-- ================= TAB: COUNTERPARTIES & FNS ANALYSIS (nalogbi + check) ================= -->
+    <div id="tabContentCounterparties" class="hidden space-y-5">
+      
+      <!-- Compact Header with Action Buttons -->
+      <div class="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-200">
+        <div>
+          <h2 class="text-lg font-black text-slate-900 font-display">Контрагенты и ФНС</h2>
+          <p class="text-xs text-slate-400">Проверка блокировок счетов (ст. 76 НК РФ) и факторов риска дебиторов</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="openAddCounterpartyModal()" class="bg-ci-600 hover:bg-ci-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5 shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>+ Контрагент</span>
+          </button>
+          <button onclick="analyzeAllCounterparties()" id="btnCheckAllFns" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5 border border-slate-200">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-ci-600"></i>
+            <span>Проверить всех</span>
+          </button>
+          <button onclick="openFnsApiKeyModal()" id="btnFnsKeyStatus" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-2 border border-slate-200">
+            <span id="fnsKeyStatusDot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span id="fnsKeyStatusLabel">Ключ ФНС</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4 Compact KPI Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-white rounded-xl p-3 border border-slate-200 card-shadow">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">В реестре</span>
+          <div id="kpiCpTotal" class="text-lg font-black text-slate-900 font-display">0</div>
+        </div>
+        <div class="bg-white rounded-xl p-3 border border-slate-200 card-shadow">
+          <span class="text-[10px] uppercase font-bold text-emerald-600 block mb-0.5">Проверено в ФНС</span>
+          <div id="kpiCpChecked" class="text-lg font-black text-emerald-700 font-display">0</div>
+        </div>
+        <div class="bg-white rounded-xl p-3 border border-red-200 bg-red-50/50 card-shadow">
+          <span class="text-[10px] uppercase font-bold text-red-600 block mb-0.5">Блокировки (ст. 76)</span>
+          <div id="kpiCpBlocked" class="text-lg font-black text-red-700 font-display">0</div>
+        </div>
+        <div class="bg-white rounded-xl p-3 border border-amber-200 bg-amber-50/50 card-shadow">
+          <span class="text-[10px] uppercase font-bold text-amber-700 block mb-0.5">В зоне риска</span>
+          <div id="kpiCpAtRiskSum" class="text-lg font-black text-amber-800 font-display">0 ₽</div>
+        </div>
+      </div>
+
+      <!-- TABLE & FILTERS CARD -->
+      <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+        
+        <!-- Controls Bar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 mb-4 gap-3">
+          <!-- Search -->
+          <div class="relative flex-1 max-w-sm">
+            <input type="text" id="cpSearchInput" oninput="filterCounterpartiesTable()" placeholder="Поиск по наименованию или ИНН..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <i data-lucide="search" class="w-3.5 h-3.5"></i>
+            </div>
+          </div>
+
+          <!-- Filter Pills -->
+          <div class="flex items-center space-x-1.5 overflow-x-auto text-[11px] font-bold">
+            <button onclick="setCpFilter('all')" id="cpFilter-all" class="bg-emerald-600 text-white px-2.5 py-1.5 rounded-xl transition shadow-xs">
+              Все (<span id="cpCountAll">0</span>)
+            </button>
+            <button onclick="setCpFilter('payer')" id="cpFilter-payer" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-xl transition">
+              Дебиторы
+            </button>
+            <button onclick="setCpFilter('supplier')" id="cpFilter-supplier" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-xl transition">
+              Поставщики
+            </button>
+            <button onclick="setCpFilter('blocked')" id="cpFilter-blocked" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-2.5 py-1.5 rounded-xl transition flex items-center space-x-1">
+              <span>⛔ Заблокированы</span>
+              <span id="cpCountBlocked" class="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full">0</span>
+            </button>
+            <button onclick="setCpFilter('risk')" id="cpFilter-risk" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1.5 rounded-xl transition">
+              ⚠️ Зона риска
+            </button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="text-[11px] font-extrabold uppercase text-slate-400 border-b border-slate-100 pb-2">
+                <th class="py-2.5 px-3">Контрагент</th>
+                <th class="py-2.5 px-3">Роль</th>
+                <th class="py-2.5 px-3 text-right">Оборот</th>
+                <th class="py-2.5 px-3">Статус ФНС (nalogbi + check)</th>
+                <th class="py-2.5 px-3 text-center" title="Учитывать влияние риска неплатежа этого контрагента на прогноз Радара">
+                  Учитывать в графике
+                </th>
+                <th class="py-2.5 px-3 text-right">Действия</th>
+              </tr>
+            </thead>
+            <tbody id="counterpartiesTableBody" class="divide-y divide-slate-100">
+              <!-- Populated dynamically via renderCounterpartiesTable() -->
+              <tr>
+                <td colspan="6" class="text-center py-8 text-slate-400">
+                  <div class="animate-spin w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+                  Загрузка контрагентов...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ================= TAB: ДИРЕКТНЫЙ ЛИЧНЫЙ КАБИНЕТ (ПОЛНАЯ СТРАНИЦА) ================= -->
+    <div id="tabContentCabinet" class="hidden space-y-5">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 class="text-xl font-black text-slate-900 font-display tracking-tight">Личный кабинет предпринимателя</h2>
+          <p class="text-xs text-slate-500">Управление финансами, регулярными платежами, внешними интеграциями и навигацией</p>
+        </div>
+        <button onclick="handleLogout()" class="flex items-center space-x-1.5 text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 font-bold px-3 py-2 rounded-xl transition shadow-sm">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+          <span>Выйти из аккаунта</span>
+        </button>
+      </div>
+
+      <!-- Cabinet Sub-Navigation Bar -->
+      <div class="flex items-center space-x-1.5 overflow-x-auto hide-scrollbar p-1.5 bg-slate-100 rounded-2xl text-xs font-bold border border-slate-200">
+        <button onclick="switchCabinetSubTab('profile')" id="btnCabSubProfile" class="cab-sub-active px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5">
+          <i data-lucide="building-2" class="w-4 h-4"></i>
+          <span>Реквизиты и Налоги</span>
+        </button>
+        <button onclick="switchCabinetSubTab('slots')" id="btnCabSubSlots" class="cab-sub-inactive px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5">
+          <i data-lucide="repeat" class="w-4 h-4"></i>
+          <span>Слоты и платежи</span>
+        </button>
+        <button onclick="switchCabinetSubTab('analytics')" id="btnCabSubAnalytics" class="cab-sub-inactive px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5">
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+          <span>ДДС аналитика</span>
+        </button>
+        <button onclick="switchCabinetSubTab('integrations')" id="btnCabSubIntegrations" class="cab-sub-inactive px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+          <span>1С / ФНС интеграции</span>
+        </button>
+        <button onclick="switchCabinetSubTab('nav')" id="btnCabSubNav" class="cab-sub-inactive px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5">
+          <i data-lucide="sliders" class="w-4 h-4"></i>
+          <span>Настройка навигации</span>
+        </button>
+      </div>
+
+      <!-- Sub-section 1: Реквизиты бизнеса и выписки -->
+      <div id="cabSectionProfile" class="space-y-5">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        <!-- Card 0: Мои бизнесы (мульти-бизнес под одним аккаунтом) -->
+        <div class="lg:col-span-2 bg-white rounded-2xl p-6 card-shadow border border-slate-100 space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                <i data-lucide="briefcase" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-slate-900">Мои организации и бизнесы</h3>
+                <p class="text-[11px] text-slate-400">Все компании, привязанные к вашей учетной записи</p>
+              </div>
+            </div>
+            <button type="button" onclick="openAddBusinessModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>+ Добавить бизнес</span>
+            </button>
+          </div>
+
+          <div id="cabUserBusinessesList" class="space-y-2">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <div></div>
+        
+        <!-- Card 1: Реквизиты бизнеса (2 cols on lg) -->
+        <div class="lg:col-span-2 bg-white rounded-2xl p-6 card-shadow border border-slate-100 space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-xl bg-ci-100 text-ci-800 flex items-center justify-center font-bold">
+                <i data-lucide="building-2" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-slate-900">Реквизиты и система налогообложения</h3>
+                <p class="text-[11px] text-slate-400">Данные используются для расчета налогового календаря и прогноза</p>
+              </div>
+            </div>
+            <span id="cabPageLegalFormBadge" class="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">ИП</span>
+          </div>
+
+          <form id="cabinetDetailsForm" onsubmit="saveCabinetProfileDirect(event)" class="space-y-3.5 text-xs">
+            <div>
+              <label class="block text-slate-500 font-semibold mb-1">ФИО руководителя / индивидуального предпринимателя *</label>
+              <input type="text" id="cabPageFullName" placeholder="Иванов Иван Сергеевич" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-ci-500 text-sm">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-slate-500 font-semibold mb-1">Организационно-правовая форма *</label>
+                <select id="cabPageLegalForm" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+                  <option value="ИП">ИП (Индивидуальный предприниматель)</option>
+                  <option value="ООО">ООО (Общество с огр. ответственностью)</option>
+                  <option value="Самозанятый">Самозанятый (НПД)</option>
+                  <option value="АО">АО (Акционерное общество)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-slate-500 font-semibold mb-1">ИНН (строка с сохранением нулей) *</label>
+                <input type="text" id="cabPageInn" placeholder="10 или 12 цифр" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-slate-500 font-semibold mb-1">Название компании / наименование ИП *</label>
+              <input type="text" id="cabPageCompanyName" placeholder="ИП Иванов И.С. или ООО «Вектор»" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-slate-500 font-semibold mb-1">Отрасль деятельности</label>
+                <input type="text" id="cabPageIndustry" placeholder="Торговля, IT, строительство..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+              </div>
+              <div>
+                <label class="block text-slate-500 font-semibold mb-1">Налоговый режим (ФНС)</label>
+                <select id="cabPageTaxRegime" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+                  <option value="УСН Доходы 6%">УСН Доходы (6%)</option>
+                  <option value="УСН Доходы-Расходы 15%">УСН Доходы-Расходы (15%)</option>
+                  <option value="ОСНО">ОСНО (Общая система, НДС + Прибыль)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-slate-500 font-semibold mb-1">Текущий остаток на счете (₽)</label>
+              <input type="number" step="0.01" id="cabPageManualBalance" value="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+              <p class="text-[11px] text-slate-400 mt-1">Если указан 0, остаток рассчитывается автоматически по выписке на последний расчетный день.</p>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <button type="button" onclick="openDeleteBusinessModal()" class="flex items-center space-x-1.5 text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3.5 py-2.5 rounded-xl font-bold transition">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                <span>Удалить этот бизнес</span>
+              </button>
+              <button type="submit" class="bg-ci-600 hover:bg-ci-700 text-white font-bold px-6 py-2.5 rounded-xl transition shadow-sm flex items-center space-x-2">
+                <i data-lucide="save" class="w-4 h-4"></i>
+                <span>Сохранить реквизиты</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Card 2: Экспорт для налоговой декларации и банковская выписка -->
+        <div class="space-y-5">
+          
+          <!-- Налоговая выгрузка КУДиР -->
+          <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 space-y-3">
+            <div class="flex items-center space-x-2.5 pb-2 border-b border-slate-100">
+              <div class="w-8 h-8 rounded-xl bg-emerald-100 text-ci-800 flex items-center justify-center font-bold">
+                <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-slate-900">Налоговая декларация</h3>
+                <p class="text-[10px] text-slate-400">Формирование КУДиР и налоговой базы</p>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Выгрузка с разделением доходов и расходов по ст. 346.15 и 346.16 НК РФ. Исключены собственные переводы между счетами, автоматически рассчитан аванс по налогу (6% и 15%).
+            </p>
+
+            <div class="space-y-2 pt-1">
+              <button onclick="openTaxDeclarationStubModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl transition shadow-sm flex items-center justify-center space-x-2">
+                <i data-lucide="file-signature" class="w-4 h-4"></i>
+                <span>Создать налоговую декларацию</span>
+              </button>
+              <button onclick="download1CExchange()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center space-x-2">
+                <i data-lucide="file-text" class="w-4 h-4"></i>
+                <span>Выгрузка в 1С:Предприятие (TXT)</span>
+              </button>
+              <button onclick="downloadOperationsCSV()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center space-x-2">
+                <i data-lucide="file" class="w-4 h-4"></i>
+                <span>Полный архив операций (CSV)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Загрузка выписки -->
+          <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 space-y-3">
+            <div class="flex items-center space-x-2.5 pb-2 border-b border-slate-100">
+              <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
+                <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-slate-900">Банковская выписка</h3>
+                <p class="text-[10px] text-slate-400">Форматы CSV и 1CClientBankExchange</p>
+              </div>
+            </div>
+
+            <div class="p-4 border-2 border-dashed border-slate-200 hover:border-ci-500 rounded-xl bg-slate-50 text-center transition">
+              <input type="file" id="cabPageFileInput" accept=".csv,.txt" class="hidden" onchange="onCabPageFileSelected(this)">
+              <button type="button" onclick="document.getElementById('cabPageFileInput').click()" class="bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 font-bold text-xs px-3.5 py-1.5 rounded-lg transition shadow-sm">
+                Выбрать файл на диске
+              </button>
+              <div id="cabPageFileName" class="mt-2 text-ci-700 font-bold text-xs truncate"></div>
+            </div>
+
+            <button onclick="uploadCabPageFile()" id="btnCabPageUpload" disabled class="w-full bg-ci-600 disabled:bg-slate-200 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-sm">
+              Загрузить и проанализировать выписку
+            </button>
+
+            <div class="pt-1 text-center">
+              <span class="text-[11px] text-slate-400 block mb-1.5 font-medium">Быстрый тест в 1 клик:</span>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="loadDemoStatement('C001')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-1.5 rounded-lg text-xs">
+                  Демо C001
+                </button>
+                <button onclick="loadDemoStatement('C004')" class="bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 font-bold py-1.5 rounded-lg text-xs">
+                  Демо C004
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Card 3: История загрузок выписок (CSV) -->
+        <div class="lg:col-span-3 bg-white rounded-2xl p-6 card-shadow border border-slate-100 space-y-3.5">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                <i data-lucide="history" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-slate-900 font-display">История загрузок выписок</h3>
+                <p class="text-[11px] text-slate-400">Журнал загруженных файлов выписки, распознанных операций и оценка качества данных</p>
+              </div>
+            </div>
+            <button type="button" onclick="loadStatementUploadHistory()" class="text-xs text-ci-700 hover:text-ci-900 font-bold flex items-center space-x-1.5 bg-ci-50 hover:bg-ci-100 px-3 py-1.5 rounded-xl transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              <span>Обновить историю</span>
+            </button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-slate-200/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <th class="py-2.5 px-3">Файл выписки</th>
+                  <th class="py-2.5 px-3">Дата загрузки</th>
+                  <th class="py-2.5 px-3">Операций</th>
+                  <th class="py-2.5 px-3">Качество данных</th>
+                  <th class="py-2.5 px-3">Регулярных слотов</th>
+                  <th class="py-2.5 px-3 text-right">Статус</th>
+                </tr>
+              </thead>
+              <tbody id="uploadHistoryTableBody" class="divide-y divide-slate-100">
+                <tr>
+                  <td colspan="6" class="py-5 text-center text-slate-400">История загрузок пуста. Загрузите файл выписки для формирования кассового радара.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+      </div> <!-- End of #cabSectionProfile -->
+
+      <!-- ================= SUB-SECTION 2: SLOTS & PLANNED PAYMENTS ================= -->
+      <div id="tabContentPlanFact" class="hidden space-y-4">
+        <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+          
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-4 pb-3 border-b border-slate-100">
+            <div>
+              <h2 class="text-lg font-black text-slate-900 font-display mb-0.5">Слоты и запланированные платежи</h2>
+              <p class="text-xs text-slate-400">Управление всеми будущими списаниями и поступлениями, влияющими на кассовый радар</p>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button onclick="openAddEventModal('outflow')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm flex items-center space-x-1.5">
+                <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
+                <span>Запланировать платеж</span>
+              </button>
+              <button onclick="openAddSlotModal()" class="bg-ci-600 hover:bg-ci-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm flex items-center space-x-1.5">
+                <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
+                <span>Добавить регулярный слот</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Slots Summary Stats Bar -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+            <div class="p-3 bg-purple-50 rounded-xl border border-purple-100">
+              <span class="text-[11px] text-purple-700 font-medium">Регулярных обязательств</span>
+              <div id="slotsTotalMonthly" class="text-base font-black text-purple-950">... ₽ / мес</div>
+            </div>
+            <div class="p-3 bg-amber-50 rounded-xl border border-amber-100">
+              <span class="text-[11px] text-amber-700 font-medium">Разовых будущих платежей</span>
+              <div id="futureEventsTotalCount" class="text-base font-black text-amber-950">0</div>
+            </div>
+            <div class="p-3 bg-emerald-50 rounded-xl border border-emerald-100 col-span-2 sm:col-span-1">
+              <span class="text-[11px] text-emerald-700 font-medium">Учет в радаре</span>
+              <div class="text-xs font-bold text-emerald-900 mt-1 flex items-center space-x-1">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
+                <span>Включены в симуляцию</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 1: FUTURE PLANNED PAYMENTS / EVENTS -->
+          <div class="mb-6">
+            <div class="flex items-center justify-between mb-2.5">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <h3 class="text-xs font-black text-slate-800 uppercase tracking-wider">Разовые запланированные платежи и поступления</h3>
+                <span id="futureEventsCountBadge" class="text-[10px] bg-amber-100 text-amber-900 font-extrabold px-2 py-0.5 rounded-full">0</span>
+              </div>
+            </div>
+            <div id="futureEventsList" class="space-y-2">
+              <!-- Populated dynamically with amber/blue highlight -->
+            </div>
+          </div>
+
+          <!-- SECTION 2: MONTHLY RECURRING SLOTS -->
+          <div>
+            <div class="flex items-center space-x-2 mb-2.5 pt-4 border-t border-slate-100">
+              <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+              <h3 class="text-xs font-black text-slate-800 uppercase tracking-wider">Ежемесячные регулярные слоты</h3>
+            </div>
+            <div id="slotsList" class="space-y-2.5">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================= SUB-SECTION 3: ANALYTICS (ДДС) ================= -->
+      <div id="tabContentAnalytics" class="hidden space-y-4">
+        <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 space-y-4">
+          
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 class="text-lg font-black text-slate-900 font-display">Аналитика движения денег (ДДС)</h2>
+              <p class="text-xs text-slate-400">Фактические финансовые потоки, маржа безопасности и концентрация риска</p>
+            </div>
+            <div id="anRunwayBadge" class="text-xs px-3 py-1.5 rounded-xl font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center space-x-1.5 shadow-2xs">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span>Запас ликвидности:</span>
+              <b id="anRunwayDays" class="text-emerald-950 font-black">...</b>
+            </div>
+          </div>
+
+          <!-- Concentration Risk Callout (displayed if client > 25%) -->
+          <div id="anConcentrationBanner" class="hidden p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start space-x-3 text-xs">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+            <div>
+              <span class="font-extrabold text-amber-950 block mb-0.5">Предупреждение о концентрации выручки</span>
+              <p id="anConcentrationText" class="text-amber-800 leading-relaxed"></p>
+            </div>
+          </div>
+
+          <!-- 4 Key Analytics Metric Cards -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col justify-between">
+              <span class="text-[11px] text-slate-500 font-medium">Поступления</span>
+              <div id="anTotalInflow" class="text-base sm:text-lg font-black text-emerald-700 mt-1">... ₽</div>
+            </div>
+            <div class="p-3.5 bg-red-50 rounded-2xl border border-red-100 flex flex-col justify-between">
+              <span class="text-[11px] text-slate-500 font-medium">Списания</span>
+              <div id="anTotalOutflow" class="text-base sm:text-lg font-black text-red-700 mt-1">... ₽</div>
+            </div>
+            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between">
+              <span class="text-[11px] text-slate-500 font-medium">Чистый поток (Net)</span>
+              <div id="anNetFlow" class="text-base sm:text-lg font-black text-slate-900 mt-1">... ₽</div>
+            </div>
+            <div class="p-3.5 bg-purple-50 rounded-2xl border border-purple-100 flex flex-col justify-between">
+              <span class="text-[11px] text-slate-500 font-medium">Постоянный расход</span>
+              <div id="anMonthlyBurn" class="text-base sm:text-lg font-black text-purple-900 mt-1">... ₽ / мес</div>
+            </div>
+          </div>
+
+          <!-- 2 Column Layout: Expense Structure & Top Clients -->
+          <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 pt-1">
+            <!-- Left: Structure of Expenses (3 cols) -->
+            <div class="lg:col-span-3 space-y-3">
+              <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Куда уходят каждые 100 ₽ выручки
+              </div>
+              <div id="anCategorySharesList" class="space-y-2.5">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+
+            <!-- Right: Top Clients & Owner Draw (2 cols) -->
+            <div class="lg:col-span-2 space-y-3">
+              <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Ключевые контрагенты (поступления)
+              </div>
+              <div id="anTopClientsList" class="space-y-2">
+                <!-- Populated dynamically -->
+              </div>
+
+              <!-- Owner Withdrawn Card -->
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                <div>
+                  <span class="text-slate-500 font-medium block">Выведено владельцем:</span>
+                  <span id="anOwnerWithdrawn" class="text-xs font-black text-slate-900">... ₽</span>
+                </div>
+                <span class="text-[10px] text-slate-400 font-semibold">Дивиденды / личный доход</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================= SUB-SECTION 4: INTEGRATIONS (1С / ФНС) ================= -->
+      <div id="tabContentIntegrations" class="hidden space-y-4">
+        <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+          
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-lg font-black text-slate-900 font-display">Интеграции</h2>
+              <p class="text-xs text-slate-400">1С:Бухгалтерия, ФНС (ЕНС), Банк «Центр-инвест», ЭДО</p>
+            </div>
+            <button onclick="download1CExchange()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition">
+              1С Выгрузка .txt
+            </button>
+          </div>
+
+          <div id="integrationsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            <!-- Populated dynamically -->
+          </div>
+
+          <!-- Registry check -->
+          <div class="border-t border-slate-100 pt-4">
+            <div class="text-xs font-bold text-slate-800 mb-1">Проверка контрагента (ФНС / Федресурс)</div>
+            <div class="flex items-center space-x-2 max-w-md">
+              <input type="text" id="checkInnInput" placeholder="Введите ИНН контрагента" class="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900">
+              <button onclick="performRegistryCheck()" class="bg-ci-600 hover:bg-ci-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition">
+                Проверить
+              </button>
+            </div>
+            <div id="registryCheckResult" class="hidden mt-2 p-2.5 rounded-lg text-xs border"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================= SUB-SECTION 5: NAVBAR CUSTOMIZATION SETTINGS ================= -->
+      <div id="cabSectionNav" class="hidden space-y-4">
+        <div class="bg-white rounded-2xl p-6 card-shadow border border-slate-100 space-y-5">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-9 h-9 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                <i data-lucide="sliders" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h3 class="text-base font-black text-slate-900 font-display">Кастомизация панели навигации</h3>
+                <p class="text-xs text-slate-400">Выберите, какие вкладки отображать в верхней панели быстрого доступа</p>
+              </div>
+            </div>
+            <button onclick="resetNavbarCustomization()" type="button" class="text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition flex items-center space-x-1">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              <span>По умолчанию</span>
+            </button>
+          </div>
+
+          <p class="text-xs text-slate-600 leading-relaxed max-w-2xl">
+            Для разгрузки интерфейса вкладки «Слоты», «ДДС» и «1С / ФНС» убраны в Личный кабинет. Вы можете в любой момент вернуть их в верхнее меню или настроить отображение под свои задачи:
+          </p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+            
+            <!-- Radar -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_radar" checked disabled class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-not-allowed opacity-70">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  <span>Радар</span>
+                  <span class="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-extrabold uppercase">Базовая</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Главный график остатка и риск-светофор</div>
+              </div>
+            </label>
+
+            <!-- Breakdown -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_breakdown" onchange="saveNavbarCustomization()" checked class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="search" class="w-3.5 h-3.5 text-red-500"></i>
+                  <span>Разбор кассового разрыва</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Анализ причин и рекомендации банка</div>
+              </div>
+            </label>
+
+            <!-- Scenarios -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_scenarios" onchange="saveNavbarCustomization()" checked class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="git-branch" class="w-3.5 h-3.5 text-purple-600"></i>
+                  <span>Сценарный анализ</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Моделирование задержек и овердрафта</div>
+              </div>
+            </label>
+
+            <!-- Operations -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_operations" onchange="saveNavbarCustomization()" checked class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="receipt" class="w-3.5 h-3.5 text-blue-600"></i>
+                  <span>Выписка операций</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">История транзакций с разметкой категорий</div>
+              </div>
+            </label>
+
+            <!-- Counterparties -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_counterparties" onchange="saveNavbarCustomization()" checked class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  <span>Контрагенты ФНС</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Проверка блокировок счетов и риска</div>
+              </div>
+            </label>
+
+            <!-- PlanFact (Slots) -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_planfact" onchange="saveNavbarCustomization()" class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="repeat" class="w-3.5 h-3.5 text-purple-600"></i>
+                  <span>Слоты (платежи)</span>
+                  <span class="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-bold">В Кабинете</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Регулярные выплаты (зарплата, аренда, налоги)</div>
+              </div>
+            </label>
+
+            <!-- Analytics (DDS) -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_analytics" onchange="saveNavbarCustomization()" class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="bar-chart-3" class="w-3.5 h-3.5 text-ci-600"></i>
+                  <span>ДДС (аналитика)</span>
+                  <span class="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-bold">В Кабинете</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Движение денег, маржа безопасности и структура</div>
+              </div>
+            </label>
+
+            <!-- Integrations (1C / FNS) -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_integrations" onchange="saveNavbarCustomization()" class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="layers" class="w-3.5 h-3.5 text-amber-600"></i>
+                  <span>1С / ФНС (интеграции)</span>
+                  <span class="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-bold">В Кабинете</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Обмен с 1С, календарь ЕНП и сервисы ФНС</div>
+              </div>
+            </label>
+
+            <!-- Cabinet itself -->
+            <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50 cursor-pointer transition select-none">
+              <input type="checkbox" id="navToggle_cabinet" checked disabled class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-not-allowed opacity-70">
+              <div class="text-xs">
+                <div class="font-bold text-slate-900 flex items-center space-x-1.5">
+                  <i data-lucide="user-check" class="w-3.5 h-3.5 text-ci-700"></i>
+                  <span>Кабинет</span>
+                  <span class="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-extrabold uppercase">Всегда</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Профиль бизнеса, реквизиты, КУДиР и настройки</div>
+              </div>
+            </label>
+
+          </div>
+
+          <div id="navCustomizationSavedMsg" class="hidden text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl flex items-center space-x-2">
+            <i data-lucide="check" class="w-4 h-4 text-emerald-600"></i>
+            <span>Настройки панели навигации сохранены и применены мгновенно!</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================= ЛИЧНЫЙ КАБИНЕТ ПРЕДПРИНИМАТЕЛЯ (MODAL) ================= -->
+  <div id="cabinetModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 card-shadow border border-slate-100 max-h-[90vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-ci-100 text-ci-800 flex items-center justify-center">
+            <i data-lucide="user" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-black text-slate-900">Личный кабинет предпринимателя</h3>
+            <p id="cabUserSubline" class="text-xs text-slate-400">Реквизиты, налоговый режим и выписки</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="cabModalLogoutBtn" onclick="handleLogout()" title="Выйти из аккаунта" class="flex items-center space-x-1 text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-xl font-bold transition">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+            <span>Выйти</span>
+          </button>
+          <button onclick="closeCabinetModal()" class="text-slate-400 hover:text-slate-600 p-1">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Cabinet Tabs: Профиль / Загрузка выписки -->
+      <div class="flex border-b border-slate-100 text-xs font-bold mb-4">
+        <button onclick="setCabinetTab('profile')" id="cab-tab-btn-profile" class="pb-2 px-3 border-b-2 border-ci-600 text-ci-700">
+          Реквизиты бизнеса
+        </button>
+        <button onclick="setCabinetTab('statement')" id="cab-tab-btn-statement" class="pb-2 px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-700">
+          Загрузка выписки (CSV)
+        </button>
+      </div>
+
+      <!-- Tab 1: Profile & Company Edit -->
+      <div id="cabContentProfile" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">ФИО руководителя</label>
+          <input type="text" id="cabFullName" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">Форма собственности</label>
+            <select id="cabLegalForm" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+              <option value="ООО">ООО</option>
+              <option value="ИП">ИП</option>
+              <option value="Самозанятый">Самозанятый (НПД)</option>
+              <option value="АО">АО</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">ИНН</label>
+            <input type="text" id="cabInn" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Название организации / ИП</label>
+          <input type="text" id="cabCompanyName" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">Отрасль</label>
+            <input type="text" id="cabIndustry" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+          </div>
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">Налоговый режим</label>
+            <select id="cabTaxRegime" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+              <option value="УСН Доходы 6%">УСН Доходы 6%</option>
+              <option value="УСН Доходы-Расходы 15%">УСН Доходы-Расходы 15%</option>
+              <option value="ОСНО">ОСНО (НДС + Прибыль)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Текущий остаток на счете (₽)</label>
+          <input type="number" step="0.01" id="cabManualBalance" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+          <p class="text-[11px] text-slate-400 mt-1">Если указан 0, остаток рассчитывается по выписке на последний расчетный день.</p>
+        </div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+          <button type="button" onclick="openDeleteBusinessModal()" class="flex items-center space-x-1.5 text-xs text-red-600 hover:text-red-800 font-bold px-3 py-2 rounded-xl hover:bg-red-50 transition">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span>Удалить бизнес</span>
+          </button>
+          <button onclick="saveCabinetProfile()" class="bg-ci-600 hover:bg-ci-700 text-white font-bold px-4 py-2 rounded-xl transition shadow-sm">
+            Сохранить реквизиты
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab 2: Statement Upload (CSV / TXT) -->
+      <div id="cabContentStatement" class="hidden space-y-4 text-xs">
+        
+        <div class="p-5 border-2 border-dashed border-slate-200 hover:border-ci-500 rounded-2xl bg-slate-50 text-center transition">
+          <i data-lucide="file-up" class="w-8 h-8 mx-auto text-slate-400 mb-2"></i>
+          <div class="font-bold text-slate-800 mb-1">Выберите файл выписки (CSV или 1C TXT)</div>
+          <p class="text-[11px] text-slate-400 mb-3">Кодировки UTF-8, Windows-1251. Разделитель точка с запятой</p>
+          <input type="file" id="statementFileInput" accept=".csv,.txt" class="hidden" onchange="onFileSelected(this)">
+          <button onclick="document.getElementById('statementFileInput').click()" class="bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 font-bold px-4 py-2 rounded-xl transition">
+            Выбрать файл на диске
+          </button>
+          <div id="selectedFileName" class="mt-2 text-ci-700 font-bold truncate"></div>
+        </div>
+
+        <button onclick="uploadSelectedFile()" id="btnUploadSubmit" disabled class="w-full bg-ci-600 disabled:bg-slate-200 text-white font-bold py-2.5 rounded-xl transition shadow-sm">
+          Загрузить и проанализировать выписку
+        </button>
+
+        <div class="pt-3 border-t border-slate-100 text-center">
+          <div class="text-[11px] text-slate-400 mb-2 font-medium">Или используйте тестовые данные кейса в 1 клик:</div>
+          <div class="flex items-center justify-center space-x-2">
+            <button onclick="loadDemoStatement('C001')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold px-3 py-1.5 rounded-lg transition text-xs">
+              Загрузить C001 (Стабильная)
+            </button>
+            <button onclick="loadDemoStatement('C004')" class="bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 font-bold px-3 py-1.5 rounded-lg transition text-xs">
+              Загрузить C004 (С разрывом)
+            </button>
+          </div>
+        </div>
+
+        <!-- History in Cabinet Modal -->
+        <div class="pt-3 border-t border-slate-100 space-y-2">
+          <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+            <span>Ранее загруженные выписки:</span>
+            <button type="button" onclick="loadStatementUploadHistory()" class="text-[11px] text-ci-600 hover:underline">Обновить</button>
+          </div>
+          <div id="modalUploadHistoryList" class="space-y-1.5 max-h-36 overflow-y-auto">
+            <!-- populated dynamically -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= МОДАЛЬНОЕ ОКНО ПРОГРЕССА ЗАГРУЗКИ ВЫПИСКИ ================= -->
+  <div id="statementProgressModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 card-shadow border border-slate-100 shadow-2xl animate-in fade-in zoom-in duration-200">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-3">
+          <div id="spmHeaderIcon" class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold relative">
+            <i data-lucide="upload-cloud" class="w-5 h-5 animate-bounce"></i>
+            <span class="absolute -top-1 -right-1 flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900 tracking-tight font-display">Загрузка и обработка выписки</h3>
+            <p id="spmFileSub" class="text-xs text-slate-400 flex items-center space-x-1">
+              <span id="spmFileName" class="font-bold text-slate-700 truncate max-w-[200px]">выписка.csv</span>
+              <span>•</span>
+              <span id="spmFileSize">0 МБ</span>
+            </p>
+          </div>
+        </div>
+        <span id="spmStageBadge" class="px-2.5 py-1 rounded-full text-[11px] font-black tracking-wide uppercase bg-emerald-100 text-emerald-800">
+          Загрузка...
+        </span>
+      </div>
+
+      <!-- Main Progress Body -->
+      <div id="spmProcessingBody" class="space-y-4">
+        
+        <!-- Big Percentage & Status -->
+        <div class="flex items-baseline justify-between">
+          <span class="text-xs font-bold text-slate-500" id="spmStageTitle">Передача файла на сервер...</span>
+          <div class="text-3xl font-black text-slate-900 tracking-tight font-display">
+            <span id="spmPercent">0</span><span class="text-emerald-600">%</span>
+          </div>
+        </div>
+
+        <!-- Progress Bar Track -->
+        <div class="w-full bg-slate-100 h-3.5 rounded-full p-0.5 overflow-hidden relative shadow-inner">
+          <div id="spmBar" class="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 transition-all duration-300 ease-out shadow-sm" style="width: 0%;"></div>
+        </div>
+
+        <!-- Detail Stage Text -->
+        <div class="bg-slate-50 border border-slate-200/70 rounded-xl p-3 flex items-center space-x-2.5 text-xs text-slate-700">
+          <div class="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0"></div>
+          <span id="spmStageText" class="font-medium truncate">Подготовка потока передачи...</span>
+        </div>
+
+        <!-- Realtime Metrics Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-center">
+          <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Обработано</div>
+            <div id="spmRows" class="text-xs font-black text-slate-800">0 / 0</div>
+          </div>
+          <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Скорость</div>
+            <div id="spmSpeed" class="text-xs font-black text-emerald-700">—</div>
+          </div>
+          <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Прошло</div>
+            <div id="spmElapsed" class="text-xs font-black text-slate-800">0.0 с</div>
+          </div>
+          <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Осталось ~</div>
+            <div id="spmEta" class="text-xs font-black text-slate-800">—</div>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-slate-400 text-center leading-relaxed">
+          Автоматическая очистка ИНН, дедупликация, AI-разметка категорий и расчет регулярных слотов.
+        </p>
+      </div>
+
+      <!-- Completion Success View (hidden until done) -->
+      <div id="spmSuccessBody" class="hidden space-y-4 pt-2">
+        <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start space-x-3">
+          <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 font-bold">
+            <i data-lucide="check" class="w-5 h-5"></i>
+          </div>
+          <div class="space-y-1">
+            <h4 class="text-sm font-black text-emerald-900" id="spmSuccessTitle">Выписка успешно загружена!</h4>
+            <p class="text-xs text-emerald-700 leading-relaxed" id="spmSuccessDesc">
+              Все операции обработаны, сформирован кассовый радар и ML-прогноз.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span class="text-slate-400 block text-[10px] font-bold uppercase">Операций в базе</span>
+            <span id="spmResOps" class="text-sm font-black text-slate-900">0</span>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span class="text-slate-400 block text-[10px] font-bold uppercase">Найдено слотов</span>
+            <span id="spmResSlots" class="text-sm font-black text-slate-900">0</span>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span class="text-slate-400 block text-[10px] font-bold uppercase">Период выписки</span>
+            <span id="spmResDates" class="text-xs font-bold text-slate-800">—</span>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span class="text-slate-400 block text-[10px] font-bold uppercase">Итоговый остаток</span>
+            <span id="spmResBalance" class="text-xs font-black text-emerald-700">—</span>
+          </div>
+        </div>
+
+        <button onclick="closeStatementProgressModal(true)" class="w-full bg-ci-600 hover:bg-ci-700 text-white font-bold py-3 rounded-xl transition shadow-md flex items-center justify-center space-x-2 text-xs">
+          <span>Перейти к Кассовому радару</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Error View (hidden unless failure) -->
+      <div id="spmErrorBody" class="hidden space-y-4 pt-2">
+        <div class="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start space-x-3">
+          <div class="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 font-bold">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          </div>
+          <div class="space-y-1">
+            <h4 class="text-sm font-black text-red-900">Ошибка обработки выписки</h4>
+            <p class="text-xs text-red-700 leading-relaxed" id="spmErrorText">Некорректный формат файла</p>
+          </div>
+        </div>
+        <button onclick="closeStatementProgressModal(false)" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl transition text-xs">
+          Закрыть
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= УПРОЩЕННАЯ АВТОРИЗАЦИЯ БЕЗ ПАРОЛЕЙ (ЧИСТО ПО ПОЧТЕ) ================= -->
+  <div id="authModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 card-shadow border border-slate-100 max-h-[90vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-ci-600 text-white flex items-center justify-center font-bold">
+            <i data-lucide="mail-check" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 id="authModalTitle" class="text-base font-black text-slate-900">Вход по почте</h3>
+            <p id="authModalSubtitle" class="text-xs text-slate-400">Быстрый вход без пароля по коду</p>
+          </div>
+        </div>
+        <button onclick="closeAuthModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- STEP 1: Enter Email -->
+      <div id="authStep1Email" class="space-y-3.5 text-xs">
+        <form onsubmit="handleSendOtpCode(event)" class="space-y-3">
+          <div>
+            <label class="block text-slate-600 font-semibold mb-1">Корпоративный или личный Email</label>
+            <input type="email" id="otpEmailInput" required placeholder="director@company.ru" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-900 focus:ring-2 focus:ring-ci-500 text-sm">
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            Мы пришлем 6-значный одноразовый код на вашу почту для мгновенного входа. Никаких паролей запоминать не нужно.
+          </p>
+          <button type="submit" id="btnSendOtp" class="w-full bg-ci-600 hover:bg-ci-700 text-white font-bold py-3 rounded-xl transition shadow-sm flex items-center justify-center space-x-2 text-sm">
+            <i data-lucide="send" class="w-4 h-4"></i>
+            <span>Получить код на почту</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- STEP 2: Enter 6-digit Code -->
+      <div id="authStep2Code" class="hidden space-y-3.5 text-xs">
+        <form onsubmit="handleVerifyOtpCode(event)" class="space-y-3">
+          <div class="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
+            <div class="text-[11px] text-emerald-800 font-medium">Код подтверждения отправлен на:</div>
+            <div id="otpSentEmailDisplay" class="font-black text-emerald-950 text-xs truncate"></div>
+          </div>
+
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1.5 text-center">Введите 6-значный код из письма</label>
+            <input type="text" id="otpCodeInput" maxlength="6" pattern="[0-9]{6}" required placeholder="••••••" class="w-full bg-slate-50 border-2 border-ci-500 rounded-xl p-3 text-center font-black text-2xl tracking-[0.4em] text-slate-900 focus:ring-2 focus:ring-ci-500 font-mono">
+          </div>
+
+          <div class="flex items-center justify-between text-[11px] text-slate-400">
+            <button type="button" onclick="resendOtpCode()" id="btnResendOtp" class="text-ci-700 hover:underline font-semibold">
+              Отправить код повторно
+            </button>
+            <button type="button" onclick="cancelOtpStep()" class="hover:text-slate-600 underline">
+              Изменить email
+            </button>
+          </div>
+
+          <button type="submit" id="btnVerifyOtp" class="w-full bg-ci-600 hover:bg-ci-700 text-white font-bold py-3 rounded-xl transition shadow-sm mt-1 text-sm">
+            Подтвердить и войти
+          </button>
+        </form>
+      </div>
+
+      <!-- STEP 3: Complete Business Registration (No password needed!) -->
+      <div id="authStep3Complete" class="hidden space-y-3.5 text-xs">
+        <div class="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center space-x-2 text-emerald-900 font-medium">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+          <span class="truncate">Email подтвержден: <b id="verifiedEmailDisplay"></b></span>
+        </div>
+
+        <form id="completeRegForm" onsubmit="handleCompleteRegistration(event)" class="space-y-3 text-xs">
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">ФИО руководителя / предпринимателя *</label>
+            <input type="text" id="compRegFullName" required placeholder="Иванов Иван Сергеевич" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-slate-500 font-semibold mb-1">Форма *</label>
+              <select id="compRegLegalForm" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+                <option value="ИП">ИП</option>
+                <option value="ООО">ООО</option>
+                <option value="Самозанятый">Самозанятый</option>
+                <option value="АО">АО</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-500 font-semibold mb-1">ИНН *</label>
+              <input type="text" id="compRegInn" required placeholder="10 или 12 цифр" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">Название организации / ИП *</label>
+            <input type="text" id="compRegCompanyName" required placeholder="ИП Иванов И.С. или ООО «Вектор»" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-slate-500 font-semibold mb-1">Отрасль</label>
+              <select id="compRegIndustry" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+                <option value="Торговля и услуги">Торговля и услуги</option>
+                <option value="Общепит">Общепит</option>
+                <option value="IT-услуги и связь">IT-услуги и связь</option>
+                <option value="Строительство">Строительство</option>
+                <option value="Грузоперевозки">Грузоперевозки</option>
+                <option value="Автосервис">Автосервис</option>
+                <option value="Сельское хозяйство">Сельское хозяйство</option>
+                <option value="Маркетплейсы">Маркетплейсы</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-500 font-semibold mb-1">Налоговый режим</label>
+              <select id="compRegTaxRegime" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+                <option value="УСН Доходы 6%">УСН Доходы 6%</option>
+                <option value="УСН Доходы-Расходы 15%">УСН Доходы-Расходы 15%</option>
+                <option value="ОСНО">ОСНО</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">Стартовый остаток на счете (₽)</label>
+            <input type="number" step="0.01" id="compRegInitialBalance" value="50000" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+            <p class="text-[11px] text-slate-400 mt-1">Остаток будет скорректирован по выписке после первой загрузки.</p>
+          </div>
+
+          <button type="submit" class="w-full bg-ci-600 hover:bg-ci-700 text-white font-bold py-3 rounded-xl transition shadow-sm mt-1 text-sm">
+            Открыть Кассовый радар
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= СОРТИРОВКА И ФИЛЬТРЫ ОПЕРАЦИЙ (КАК НА МАРКЕТПЛЕЙСАХ) ================= -->
+  <div id="marketplaceSortModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 card-shadow border border-slate-100 max-h-[90vh] overflow-y-auto space-y-4">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-xl bg-ci-100 text-ci-800 flex items-center justify-center font-bold">
+            <i data-lucide="arrow-down-up" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-black text-slate-900">Сортировка и фильтры</h3>
+            <p class="text-xs text-slate-400">Настройка отображения выписки</p>
+          </div>
+        </div>
+        <button onclick="closeMarketplaceSortModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Section 1: Сортировка по значению (Radio) -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Сортировка</label>
+        <div class="space-y-1.5 text-xs font-semibold">
+          <label class="flex items-center space-x-2.5 p-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+            <input type="radio" name="marketSortRule" value="date_desc" checked class="text-ci-600 focus:ring-ci-500">
+            <span>Сначала новые (по дате убывания)</span>
+          </label>
+          <label class="flex items-center space-x-2.5 p-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+            <input type="radio" name="marketSortRule" value="date_asc" class="text-ci-600 focus:ring-ci-500">
+            <span>Сначала старые (по дате возрастания)</span>
+          </label>
+          <label class="flex items-center space-x-2.5 p-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+            <input type="radio" name="marketSortRule" value="amount_desc" class="text-ci-600 focus:ring-ci-500">
+            <span>Самые крупные (по убыванию суммы)</span>
+          </label>
+          <label class="flex items-center space-x-2.5 p-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+            <input type="radio" name="marketSortRule" value="amount_asc" class="text-ci-600 focus:ring-ci-500">
+            <span>Самые мелкие (по возрастанию суммы)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Section 2: Тип операции -->
+      <div class="pt-2 border-t border-slate-100">
+        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Тип платежа</label>
+        <div class="grid grid-cols-3 gap-2 text-xs font-bold">
+          <button type="button" onclick="setMarketTypeFilter('all')" id="marketTypeBtn-all" class="p-2 rounded-xl bg-ci-600 text-white transition text-center shadow-sm">
+            Все
+          </button>
+          <button type="button" onclick="setMarketTypeFilter('inflow')" id="marketTypeBtn-inflow" class="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition text-center">
+            Доходы (+)
+          </button>
+          <button type="button" onclick="setMarketTypeFilter('outflow')" id="marketTypeBtn-outflow" class="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition text-center">
+            Списания (-)
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 3: Фильтр по диапазону сумм (цена) -->
+      <div class="pt-2 border-t border-slate-100">
+        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Сумма операции (₽)</label>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <span class="text-[10px] text-slate-400 block mb-0.5">От:</span>
+            <input type="number" id="marketMinAmount" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-400 block mb-0.5">До:</span>
+            <input type="number" id="marketMaxAmount" placeholder="1 000 000" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-900">
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Категории (Chips) -->
+      <div class="pt-2 border-t border-slate-100">
+        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Категории</label>
+        <div class="flex flex-wrap gap-1.5 text-xs">
+          <button type="button" onclick="toggleMarketCategory('cat_revenue_client')" id="mCat-cat_revenue_client" class="market-cat-chip px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-semibold transition hover:bg-slate-200">
+            Выручка
+          </button>
+          <button type="button" onclick="toggleMarketCategory('cat_procurement')" id="mCat-cat_procurement" class="market-cat-chip px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-semibold transition hover:bg-slate-200">
+            Закупки
+          </button>
+          <button type="button" onclick="toggleMarketCategory('cat_payroll')" id="mCat-cat_payroll" class="market-cat-chip px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-semibold transition hover:bg-slate-200">
+            Зарплата
+          </button>
+          <button type="button" onclick="toggleMarketCategory('cat_tax_enp')" id="mCat-cat_tax_enp" class="market-cat-chip px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-semibold transition hover:bg-slate-200">
+            Налоги (ЕНП)
+          </button>
+          <button type="button" onclick="toggleMarketCategory('cat_rent_utilities')" id="mCat-cat_rent_utilities" class="market-cat-chip px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-semibold transition hover:bg-slate-200">
+            Аренда
+          </button>
+          <button type="button" onclick="toggleMarketCategory('cat_bank_credit')" id="mCat-cat_bank_credit" class="market-cat-chip px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-semibold transition hover:bg-slate-200">
+            Банк
+          </button>
+          <button type="button" onclick="toggleMarketCategory('cat_transport')" id="mCat-cat_transport" class="market-cat-chip px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-semibold transition hover:bg-slate-200">
+            Транспорт
+          </button>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+        <button type="button" onclick="resetMarketSortAndFilters()" class="text-xs text-slate-500 hover:text-slate-800 font-bold px-3 py-2 rounded-xl transition">
+          Сбросить все
+        </button>
+        <button type="button" onclick="applyMarketSortAndFilters()" class="bg-ci-600 hover:bg-ci-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-sm">
+          Применить фильтры
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- QUICK ADD EVENT MODAL ("Жду поступление" / "Заплачу") -->
+  <div id="eventModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 card-shadow border border-slate-100 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div id="modalEventIconBg" class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          </div>
+          <h3 id="modalEventTitle" class="text-sm font-black text-slate-900">Событие</h3>
+        </div>
+        <button onclick="closeAddEventModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="addEventForm" onsubmit="submitNewEvent(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Сумма платежа (₽) *</label>
+          <input type="number" step="0.01" id="evAmount" required placeholder="150000" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-black text-slate-900 focus:ring-2 focus:ring-ci-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Категория платежа *</label>
+          <select id="evCategory" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+            <!-- Populated dynamically based on inflow/outflow -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Ожидаемая дата исполнения *</label>
+          <input type="date" id="evDate" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900">
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Степень уверенности</label>
+          <select id="evProbability" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-900">
+            <option value="1.0">Точно (100%) — подтверждено счетом</option>
+            <option value="0.75" selected>Высокая (75%) — обычный график</option>
+            <option value="0.40">Средняя (40%) — вероятная сделка</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Наименование контрагента *</label>
+          <input type="text" id="evCounterparty" list="counterpartyNamesList" oninput="onCounterpartyNameInput(this.value, 'add')" required placeholder="ООО «Партнер» или ИП Иванов" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+          <datalist id="counterpartyNamesList"></datalist>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">ИНН контрагента *</label>
+          <input type="text" id="evCounterpartyInn" list="counterpartyInnsList" oninput="onCounterpartyInnInput(this.value, 'add')" required placeholder="10 цифр (ООО/АО) или 12 цифр (ИП)" maxlength="12" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-ci-500 font-mono">
+          <datalist id="counterpartyInnsList"></datalist>
+          <p class="text-[10px] text-slate-400 mt-1">10 цифр (ООО/АО) или 12 цифр (ИП) для проверки в ФНС</p>
+        </div>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <button type="button" onclick="closeAddEventModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition">
+            Отмена
+          </button>
+          <button type="submit" id="evSubmitBtn" class="flex-1 py-2.5 rounded-xl bg-ci-600 hover:bg-ci-700 text-white font-bold transition shadow-sm">
+            Сохранить
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD REGULAR SLOT (РЕГУЛЯРНЫЙ ПЛАТЕЖ) -->
+  <div id="addSlotModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 card-shadow border border-slate-100 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+            <i data-lucide="repeat" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-sm font-black text-slate-900">Новый регулярный платеж</h3>
+        </div>
+        <button onclick="closeAddSlotModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="addSlotForm" onsubmit="submitNewSlot(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Категория платежа *</label>
+          <select id="slotCategory" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900">
+            <option value="cat_payroll">Люди (зарплата и аванс)</option>
+            <option value="cat_rent_utilities">Аренда и коммуналка</option>
+            <option value="cat_tax_enp">Налоги и взносы (ЕНП)</option>
+            <option value="cat_bank_credit">Банк и кредиты</option>
+            <option value="cat_services_marketing">Маркетинг и сервисы</option>
+            <option value="cat_procurement">Регулярные закупки</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Типичная сумма (₽) *</label>
+          <input type="number" step="0.01" id="slotAmount" required placeholder="50000" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-black text-slate-900 focus:ring-2 focus:ring-ci-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">День месяца (1–31) *</label>
+          <input type="number" min="1" max="31" id="slotDayOfMonth" value="10" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900">
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Контрагент / Назначение</label>
+          <input type="text" id="slotCounterparty" placeholder="Арендодатель или Зарплатный реестр" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900">
+        </div>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <button type="button" onclick="closeAddSlotModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition">
+            Отмена
+          </button>
+          <button type="submit" class="flex-1 py-2.5 rounded-xl bg-ci-600 hover:bg-ci-700 text-white font-bold transition shadow-sm">
+            Добавить слот
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD CUSTOM SCENARIO -->
+  <div id="customScenarioModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 card-shadow border border-slate-100 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+            <i data-lucide="git-branch" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-slate-900 text-sm">Новый стресс-сценарий</h3>
+            <p class="text-[11px] text-slate-400">Моделирование рисков бизнеса</p>
+          </div>
+        </div>
+        <button onclick="closeCustomScenarioModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="customScenarioForm" onsubmit="submitCustomScenario(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Название сценария *</label>
+          <input type="text" id="custScenName" required placeholder="Например: Задержка оплаты от партнера" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-purple-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Тип стресс-события *</label>
+          <select id="custScenType" onchange="onCustScenTypeChange(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-purple-500">
+            <option value="delayed_payment">Задержка оплаты от дебитора</option>
+            <option value="revenue_drop">Спад выручки (%)</option>
+            <option value="unexpected_expense">Внеплановый крупный расход (₽)</option>
+            <option value="cost_increase">Рост регулярных трат (%)</option>
+          </select>
+        </div>
+
+        <div>
+          <label id="custScenParamLabel" class="block text-slate-500 font-semibold mb-1">Срок задержки (дней) *</label>
+          <input type="number" id="custScenParamValue" value="21" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-black text-slate-900 focus:ring-2 focus:ring-purple-500">
+        </div>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <button type="button" onclick="closeCustomScenarioModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition">
+            Отмена
+          </button>
+          <button type="submit" class="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition shadow-sm">
+            Создать
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD NEW BUSINESS TO ACCOUNT -->
+  <div id="addBusinessModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 card-shadow border border-slate-100 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+            <i data-lucide="building-2" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-slate-900 text-sm">Добавить бизнес в аккаунт</h3>
+            <p class="text-[11px] text-slate-400">Управление несколькими организациями</p>
+          </div>
+        </div>
+        <button onclick="closeAddBusinessModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="addBusinessForm" onsubmit="submitNewBusiness(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Название организации / бренда *</label>
+          <input type="text" id="newBizName" required placeholder="Например: ООО «Вектор» или ИП Иванов" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">ИНН организации *</label>
+            <input type="text" id="newBizInn" required placeholder="6164001234" maxlength="12" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">Форма собственности</label>
+            <select id="newBizLegalForm" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500">
+              <option value="ООО" selected>ООО</option>
+              <option value="ИП">ИП</option>
+              <option value="АО">АО</option>
+              <option value="Самозанятый">Самозанятый</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">Отрасль деятельности</label>
+            <select id="newBizIndustry" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500">
+              <option value="Оптовая торговля" selected>Оптовая торговля</option>
+              <option value="Розничная торговля">Розничная торговля</option>
+              <option value="Производство">Производство</option>
+              <option value="Строительство">Строительство</option>
+              <option value="Сельское хозяйство">Сельское хозяйство</option>
+              <option value="Услуги">Услуги B2B</option>
+              <option value="IT и телеком">IT и телеком</option>
+              <option value="Логистика и транспорт">Логистика</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-500 font-semibold mb-1">Система налогообложения</label>
+            <select id="newBizTaxRegime" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500">
+              <option value="УСН Доходы 6%" selected>УСН Доходы 6%</option>
+              <option value="УСН Доходы-Расходы 15%">УСН Доходы-Расходы 15%</option>
+              <option value="ОСНО">ОСНО</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Начальный баланс на счете (₽)</label>
+          <input type="number" step="0.01" id="newBizInitialBalance" value="0" placeholder="100000" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-black text-slate-900 focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <button type="button" onclick="closeAddBusinessModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition">
+            Отмена
+          </button>
+          <button type="submit" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition shadow-sm">
+            Создать бизнес
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT OPERATION CATEGORY (БЕЗ УСТАРЕВШЕГО PROMPT) -->
+  <div id="editCategoryModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 card-shadow border border-slate-100 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-ci-100 text-ci-800 flex items-center justify-center font-bold">
+            <i data-lucide="tag" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-sm font-black text-slate-900">Изменение категории</h3>
+        </div>
+        <button onclick="closeEditCategoryModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3.5 text-xs">
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+          <div id="editCatCounterparty" class="font-black text-slate-900 truncate">ООО Контрагент</div>
+          <div id="editCatPurpose" class="text-[11px] text-slate-400 truncate">Оплата по счету №...</div>
+          <div id="editCatAmount" class="font-extrabold text-xs text-ci-700 pt-0.5">0 ₽</div>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Выберите верную категорию *</label>
+          <select id="editCatSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+            <option value="cat_revenue_client">Выручка от клиентов</option>
+            <option value="cat_revenue_acquiring">Эквайринг и СБП</option>
+            <option value="cat_procurement">Закупки и сырьё</option>
+            <option value="cat_payroll">Люди (зарплата и аванс)</option>
+            <option value="cat_tax_enp">Налоги и взносы (ЕНП)</option>
+            <option value="cat_rent_utilities">Аренда и коммуналка</option>
+            <option value="cat_bank_credit">Банк и кредиты</option>
+            <option value="cat_services_marketing">Маркетинг и сервисы</option>
+            <option value="cat_transport">Транспорт и авто</option>
+            <option value="cat_owner_draw">Деньги владельцу (дивиденды)</option>
+            <option value="cat_owner_deposit">Деньги от владельца (взнос)</option>
+            <option value="cat_transfer_own">Свои счета (перевод)</option>
+            <option value="cat_other_out">Прочие списания</option>
+            <option value="cat_other_in">Прочие поступления</option>
+          </select>
+        </div>
+
+        <label class="flex items-start space-x-2.5 p-2 bg-emerald-50 border border-emerald-200 rounded-xl cursor-pointer">
+          <input type="checkbox" id="editCatApplySimilar" checked class="mt-0.5 rounded text-ci-600 focus:ring-ci-500">
+          <span class="text-[11px] text-emerald-950 leading-tight font-medium">
+            <b>Запомнить правило</b>: применять эту категорию ко всем похожим платежам этого контрагента
+          </span>
+        </label>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <button type="button" onclick="closeEditCategoryModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition">
+            Отмена
+          </button>
+          <button type="button" onclick="saveEditedCategory()" class="flex-1 py-2.5 rounded-xl bg-ci-600 hover:bg-ci-700 text-white font-bold transition shadow-sm">
+            Сохранить
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: COUNTERPARTY FNS DETAIL (nalogbi + check) ================= -->
+  <div id="counterpartyDetailModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 card-shadow border border-slate-100 max-h-[90vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between pb-4 border-b border-slate-100">
+        <div>
+          <div class="flex items-center space-x-2 mb-1">
+            <span id="modalCpRoleBadge" class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Дебитор</span>
+            <span id="modalCpRiskBadge" class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700">⛔ Блокировка счета</span>
+          </div>
+          <h3 id="modalCpName" class="text-lg font-black text-slate-900 font-display">ООО «Партнер»</h3>
+          <div class="text-xs text-slate-400 mt-0.5">
+            ИНН: <b id="modalCpInn" class="text-slate-700">7707083893</b> • Проверено по базе <span class="text-ci-700 font-bold">api-fns.ru</span>
+          </div>
+        </div>
+        <button onclick="closeCounterpartyDetailModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body: ONE UNIFIED FACTORS TABLE (RISK FIRST, POSITIVE SECOND) -->
+      <div class="space-y-4 pt-4 text-xs">
+
+        <!-- Quick 3-Metric KPI Strip -->
+        <div class="grid grid-cols-3 gap-2.5 text-center">
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Надежность</span>
+            <div id="modalCheckScore" class="text-sm font-black text-slate-900">100 / 100</div>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Блокировки ст. 76</span>
+            <div id="modalNalogbiStatus" class="text-sm font-black text-emerald-700">Блокировок нет</div>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Статус ЕГРЮЛ</span>
+            <div id="modalEgrulStatus" class="text-sm font-black text-slate-800">Действующее</div>
+          </div>
+        </div>
+
+        <!-- Single Unified Table: Risk factors FIRST, then Positive markers -->
+        <div class="border border-slate-200 rounded-2xl overflow-hidden bg-white card-shadow">
+          <div class="bg-slate-50 px-4 py-2.5 font-black text-xs text-slate-800 border-b border-slate-200 flex items-center justify-between">
+            <div class="flex items-center space-x-1.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-ci-600"></i>
+              <span>Единый отчет благонадежности ФНС</span>
+            </div>
+            <span class="text-[11px] text-slate-400 font-semibold">api-fns.ru</span>
+          </div>
+
+          <div id="modalUnifiedFactorsList" class="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+            <!-- Populated dynamically: first negative risk factors (red), then positive markers (emerald) -->
+          </div>
+        </div>
+
+        <!-- Compatibility containers (hidden) -->
+        <div class="hidden">
+          <div id="modalScoreBar"></div>
+          <div id="modalNalogbiDetails"></div>
+          <ul id="modalNegativeFactors"></ul>
+          <ul id="modalPositiveFactors"></ul>
+          <div id="modalCashflowImpact"></div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-between pt-4 border-t border-slate-100 mt-4 gap-2">
+        <label class="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+          <input type="checkbox" id="modalIncludeInForecastToggle" onchange="toggleModalCounterpartyForecast(this.checked)" class="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+          <span>Учитывать эту проверку в итоговом графике Радара</span>
+        </label>
+        <button onclick="applyCounterpartyToRadar()" class="bg-ci-600 hover:bg-ci-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center space-x-1.5 shadow-sm">
+          <i data-lucide="activity" class="w-4 h-4"></i>
+          <span>Смотреть на графике Радара</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= MODAL: ADD COUNTERPARTY BY INN ================= -->
+  <div id="addCounterpartyModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 card-shadow border border-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <h3 class="text-base font-black text-slate-900 font-display">Добавить контрагента для проверки</h3>
+        <button onclick="closeAddCounterpartyModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="space-y-3.5 text-xs">
+        <div>
+          <label class="block text-slate-500 font-bold mb-1">ИНН организации или ИП (10 или 12 цифр)</label>
+          <input type="text" id="addCpInn" placeholder="Например: 6164210984 или 7707083893" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+        </div>
+        <div>
+          <label class="block text-slate-500 font-bold mb-1">Наименование компании (необязательно)</label>
+          <input type="text" id="addCpName" placeholder="ООО «Название»" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+        </div>
+        <div>
+          <label class="block text-slate-500 font-bold mb-1">Роль в денежном потоке</label>
+          <select id="addCpRole" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+            <option value="payer">Дебитор / Покупатель (ждет оплату)</option>
+            <option value="supplier">Поставщик / Подрядчик (платит ему)</option>
+            <option value="both">Смешанный партнер</option>
+          </select>
+        </div>
+        <label class="flex items-center space-x-2 cursor-pointer bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 text-emerald-950 font-bold">
+          <input type="checkbox" id="addCpIncludeForecast" checked class="rounded text-emerald-600 focus:ring-emerald-500">
+          <span>Учитывать влияние в итоговом графике Радара</span>
+        </label>
+        <div class="flex items-center space-x-2 pt-2">
+          <button type="button" onclick="closeAddCounterpartyModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition">
+            Отмена
+          </button>
+          <button type="button" onclick="submitNewCounterparty()" id="btnSubmitNewCp" class="flex-1 py-2.5 rounded-xl bg-ci-600 hover:bg-ci-700 text-white font-extrabold transition shadow-sm">
+            Проверить в ФНС
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: FNS API KEY ================= -->
+  <div id="fnsApiKeyModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 card-shadow border border-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+        <div class="flex items-center space-x-2">
+          <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
+            <i data-lucide="key" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-base font-black text-slate-900 font-display">Ключ доступа к API-ФНС</h3>
+        </div>
+        <button onclick="closeFnsApiKeyModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+        Для выполнения прямых онлайн-запросов к сервису <a href="https://api-fns.ru" target="_blank" class="text-ci-600 font-bold underline">api-fns.ru</a> укажите ваш API-ключ из <a href="https://api-fns.ru/user?cabinet&id=22722" target="_blank" class="text-ci-600 font-bold underline">Личного кабинета</a>.
+      </p>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-600 font-bold mb-1">API Key (api-fns.ru)</label>
+          <input type="password" id="inputFnsApiKey" placeholder="Вставьте ваш ключ API..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono text-xs text-slate-900">
+        </div>
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500">
+          💡 При отсутствии ключа сервис работает в интеллектуальном демо-режиме с полной эмуляцией ответов <code>nalogbi</code> и <code>check</code>.
+        </div>
+        <div class="flex items-center space-x-2 pt-1">
+          <button type="button" onclick="closeFnsApiKeyModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition">
+            Отмена
+          </button>
+          <button type="button" onclick="saveFnsApiKey()" class="flex-1 py-2.5 rounded-xl bg-ci-600 hover:bg-ci-700 text-white font-extrabold transition shadow-sm">
+            Сохранить ключ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- EDIT BALANCE MODAL -->
+  <div id="editBalanceModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 card-shadow border border-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-xl bg-emerald-100 text-ci-800 flex items-center justify-center">
+            <i data-lucide="edit-3" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-slate-900 font-display">Текущий остаток</h3>
+            <p class="text-[11px] text-slate-400">Корректировка остатка на расчетном счете</p>
+          </div>
+        </div>
+        <button onclick="closeEditBalanceModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form onsubmit="submitEditBalance(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Сумма остатка (₽)</label>
+          <input type="number" step="0.01" id="editBalanceInput" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-black text-lg text-slate-900 focus:ring-2 focus:ring-emerald-500">
+          <p class="text-[11px] text-slate-400 mt-1">
+            Укажите 0, чтобы сбросить остаток к значению из банковской выписки на последний расчетный день.
+          </p>
+        </div>
+
+        <div class="bg-slate-50 rounded-xl p-2.5 text-[11px] text-slate-500 space-y-1 border border-slate-100">
+          <div class="flex justify-between">
+            <span>По выписке:</span>
+            <span id="editBalanceStatementVal" class="font-bold text-slate-800">0 ₽</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Последняя операция:</span>
+            <span id="editBalanceStatementDate" class="font-bold text-slate-800">—</span>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <button type="button" onclick="resetBalanceToStatement()" class="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition">
+            Сбросить к выписке
+          </button>
+          <button type="submit" class="flex-1 py-2 rounded-xl bg-ci-600 hover:bg-ci-700 text-white font-extrabold text-xs transition shadow-sm">
+            Сохранить
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT PLANNED PAYMENT (EVENT) -->
+  <div id="editEventModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 card-shadow border border-slate-100 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+            <i data-lucide="edit-3" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-slate-900 font-display">Редактирование платежа</h3>
+            <p class="text-[10px] text-slate-400">Изменение запланированного события</p>
+          </div>
+        </div>
+        <button onclick="closeEditEventModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="editEventForm" onsubmit="submitEditEvent(event)" class="space-y-3.5 text-xs">
+        <input type="hidden" id="editEvId">
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Сумма платежа (₽) *</label>
+          <input type="number" step="0.01" id="editEvAmount" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-black text-slate-900 focus:ring-2 focus:ring-ci-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Направление</label>
+          <select id="editEvDirection" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900">
+            <option value="outflow">Списание (расход)</option>
+            <option value="inflow">Поступление (доход)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Категория платежа</label>
+          <select id="editEvCategory" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+            <option value="cat_procurement">Закупки и сырьё</option>
+            <option value="cat_payroll">Люди (зарплата и аванс)</option>
+            <option value="cat_tax_enp">Налоги и взносы (ЕНП)</option>
+            <option value="cat_rent_utilities">Аренда и коммуналка</option>
+            <option value="cat_bank_credit">Банк и кредиты</option>
+            <option value="cat_services_marketing">Маркетинг и сервисы</option>
+            <option value="cat_transport">Транспорт и авто</option>
+            <option value="cat_revenue_client">Выручка от клиентов</option>
+            <option value="cat_revenue_acquiring">Эквайринг и СБП</option>
+            <option value="cat_other_out">Прочие списания</option>
+            <option value="cat_other_in">Прочие поступления</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Дата исполнения *</label>
+          <input type="date" id="editEvDate" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900">
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Степень уверенности (вероятность)</label>
+          <select id="editEvProbability" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-900">
+            <option value="1.0">Точно (100%) — подтверждено счетом</option>
+            <option value="0.75">Высокая (75%) — обычный график</option>
+            <option value="0.40">Средняя (40%) — вероятная сделка</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">Наименование контрагента *</label>
+          <input type="text" id="editEvCounterparty" list="counterpartyNamesList" oninput="onCounterpartyNameInput(this.value, 'edit')" required placeholder="ООО «Партнер» или ИП Иванов" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-ci-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-semibold mb-1">ИНН контрагента *</label>
+          <input type="text" id="editEvCounterpartyInn" list="counterpartyInnsList" oninput="onCounterpartyInnInput(this.value, 'edit')" required placeholder="10 цифр (ООО/АО) или 12 цифр (ИП)" maxlength="12" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-ci-500 font-mono">
+          <p class="text-[10px] text-slate-400 mt-1">10 цифр (ООО/АО) или 12 цифр (ИП) для проверки в ФНС</p>
+        </div>
+
+        <label class="flex items-center space-x-2.5 p-2.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
+          <input type="checkbox" id="editEvIsActive" class="rounded text-ci-600 focus:ring-ci-500 w-4 h-4">
+          <span class="text-xs font-bold text-slate-800">
+            Платеж активен (учитывать в кассовом радаре)
+          </span>
+        </label>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <button type="button" onclick="closeEditEventModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition">
+            Отмена
+          </button>
+          <button type="submit" class="flex-1 py-2.5 rounded-xl bg-ci-600 hover:bg-ci-700 text-white font-bold transition shadow-sm">
+            Сохранить
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DELETE BUSINESS CONFIRMATION -->
+  <div id="deleteBusinessModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 card-shadow border border-slate-100 shadow-2xl">
+      <div class="flex items-center space-x-3 text-red-600 mb-3">
+        <div class="w-10 h-10 rounded-2xl bg-red-100 flex items-center justify-center font-black">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-black text-slate-900 font-display">Удаление бизнеса</h3>
+          <p class="text-xs text-slate-400">Это действие нельзя отменить</p>
+        </div>
+      </div>
+      <p class="text-xs text-slate-600 mb-4 leading-relaxed">
+        Вы действительно хотите безвозвратно удалить организацию <b id="deleteBusinessName" class="text-slate-900">—</b> (ИНН <span id="deleteBusinessInn">—</span>) со всеми операциями, слотами и историей?
+      </p>
+      <div class="flex items-center space-x-2">
+        <button type="button" onclick="closeDeleteBusinessModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition text-xs">
+          Отмена
+        </button>
+        <button type="button" onclick="confirmDeleteBusiness()" id="btnConfirmDeleteBiz" class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black transition text-xs shadow-sm">
+          Удалить
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAX DECLARATION STUB MODAL -->
+  <div id="taxDeclarationStubModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 hidden p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 card-shadow border border-slate-100 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+            <i data-lucide="file-signature" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-slate-900">Налоговая декларация по УСН</h3>
+            <p class="text-[11px] text-slate-400 font-medium">Форма по КНД 1152017 (годовой расчет)</p>
+          </div>
+        </div>
+        <button onclick="closeTaxDeclarationStubModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-2">
+        <div class="font-black flex items-center space-x-1.5 text-amber-950">
+          <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
+          <span>Модуль формирования и редактирования декларации</span>
+        </div>
+        <p>
+          Возможность создания и редактирования декларации по УСН на конец года находится в разработке и будет активирована по окончании налогового периода.
+        </p>
+        <p class="text-[11px] text-amber-800">
+          Все квартальные налоговые уведомления, расчет базы (доходы / доходы минус расходы) и авансовые платежи автоматически рассчитаны и зафиксированы во вкладке <b>«Слоты и платежи»</b> с тегом <b>«Налоги по УСН/НДС»</b>.
+        </p>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-2">
+        <button type="button" onclick="closeTaxDeclarationStubModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition text-xs">
+          Понятно
+        </button>
+        <button type="button" onclick="downloadTaxDeclaration(); closeTaxDeclarationStubModal();" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition shadow-sm text-xs flex items-center justify-center space-x-1">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>Выгрузить расчетные данные (CSV)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toastNotification" class="hidden fixed bottom-5 right-5 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xl z-50 transition-all flex items-center space-x-2">
+    <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toastMessage">Сохранено</span>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
