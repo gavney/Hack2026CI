@@ -1,0 +1,79 @@
+# ==========================================
+# Byte-compiled / optimized / DLL files
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==========================================
+# Caches & Test artifacts
+# ==========================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+
+# ==========================================
+# Environment & Secrets (NEVER commit secrets!)
+# ==========================================
+.env
+.env.local
+.env.*.local
+fns_key.txt
+*.key
+*.pem
+*.secret
+
+# ==========================================
+# Databases & SQLite files
+# ==========================================
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# Heavy Datasets & Raw statements
+# ==========================================
+cashflow_dataset_participants/
+data/all_operations.csv
+data/statements/*.csv
+!data/statements/C001.csv
+!data/statements/C004.csv
+
+# ==========================================
+# Operating System & IDE junk
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ==========================================
+# Logs & temporary files
+# ==========================================
+*.log
+logs/
+tmp/
+temp/
+chat_extracted.txt
+others_sample.txt
+check_others.py
+tests/scratch_*.py
+scripts/scratch_*.py
