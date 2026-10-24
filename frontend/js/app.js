@@ -3887,6 +3887,12 @@ function populateTaxDeclarationForm(data) {
   setVal('declDecYear', data.dec_year || 0);
   setVal('declMinTax', data.min_tax || 0);
 
+  // Insurance premiums & deductions
+  setVal('declInsFixed', data.ins_fixed || 0);
+  setVal('declIns1Pct', data.ins_1pct || 0);
+  setVal('declIns1PctCurr', data.ins_1pct_curr || 0);
+  setVal('declIns1PctPrev', data.ins_1pct_prev || 0);
+
   // Toggle 15% conditional views
   const is15 = String(data.tax_object) === '2';
   const expSec = document.getElementById('declExpensesSection');
@@ -3951,7 +3957,11 @@ function getTaxDeclarationFormData() {
     deduct_q1: getNum('declDeductQ1'),
     deduct_q2: getNum('declDeductQ2'),
     deduct_q3: getNum('declDeductQ3'),
-    deduct_year: getNum('declDeductYear')
+    deduct_year: getNum('declDeductYear'),
+    ins_fixed: getNum('declInsFixed'),
+    ins_1pct: getNum('declIns1Pct'),
+    ins_1pct_curr: getNum('declIns1PctCurr'),
+    ins_1pct_prev: getNum('declIns1PctPrev')
   };
 }
 
@@ -4082,6 +4092,7 @@ function switchTaxDeclTab(tabKey) {
     title: { btn: 'btnDeclTabTitle', panel: 'declTabTitlePanel' },
     sec1: { btn: 'btnDeclTabSec1', panel: 'declTabSec1Panel' },
     sec2: { btn: 'btnDeclTabSec2', panel: 'declTabSec2Panel' },
+    sec3: { btn: 'btnDeclTabSec3', panel: 'declTabSec3Panel' },
     preview: { btn: 'btnDeclTabPreview', panel: 'declTabPreviewPanel' }
   };
 
@@ -4241,27 +4252,54 @@ function renderMoneyCells(val, count) {
   return renderCells(num > 0 ? String(num) : '-', count);
 }
 
+const CODE39_PATTERNS = {
+  '0': ['N', 'N', 'N', 'W', 'W', 'N', 'W', 'N', 'N'],
+  '1': ['W', 'N', 'N', 'W', 'N', 'N', 'N', 'N', 'W'],
+  '2': ['N', 'N', 'W', 'W', 'N', 'N', 'N', 'N', 'W'],
+  '3': ['W', 'N', 'W', 'W', 'N', 'N', 'N', 'N', 'N'],
+  '4': ['N', 'N', 'N', 'W', 'W', 'N', 'N', 'N', 'W'],
+  '5': ['W', 'N', 'N', 'W', 'W', 'N', 'N', 'N', 'N'],
+  '6': ['N', 'N', 'W', 'W', 'W', 'N', 'N', 'N', 'N'],
+  '7': ['N', 'N', 'N', 'W', 'N', 'N', 'W', 'N', 'W'],
+  '8': ['W', 'N', 'N', 'W', 'N', 'N', 'W', 'N', 'N'],
+  '9': ['N', 'N', 'W', 'W', 'N', 'N', 'W', 'N', 'N'],
+  '*': ['N', 'W', 'N', 'N', 'W', 'N', 'W', 'N', 'N']
+};
+
 function renderBarcodeHtml(codeStr) {
+  const clean = String(codeStr || '').replace(/\s+/g, '');
+  const fullText = `*${clean}*`;
+  const narrow = 1.05;
+  const wide = 2.8;
+  const height = 26;
+  let curX = 4;
+  let rects = '';
+
+  for (let idx = 0; idx < fullText.length; idx++) {
+    const ch = fullText[idx];
+    const pat = CODE39_PATTERNS[ch] || CODE39_PATTERNS['0'];
+    for (let i = 0; i < 9; i++) {
+      const isBar = (i % 2 === 0);
+      const w = pat[i] === 'W' ? wide : narrow;
+      if (isBar) {
+        rects += `<rect x="${curX.toFixed(1)}" y="0" width="${w.toFixed(1)}" height="${height}" fill="#000" />`;
+      }
+      curX += w;
+    }
+    if (idx < fullText.length - 1) {
+      curX += narrow;
+    }
+  }
+  curX += 4;
+  const totalW = Math.ceil(curX);
+  const textDisplay = clean.length === 8 ? `${clean.substring(0, 4)} ${clean.substring(4)}` : codeStr;
+
   return `
-    <div class="flex flex-col items-start select-none">
-      <div class="flex items-stretch h-6 space-x-[1.5px] bg-white p-0.5">
-        <span class="w-[2px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
-        <span class="w-[3px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
-        <span class="w-[2px] bg-black h-full"></span><span class="w-[3px] bg-black h-full"></span>
-        <span class="w-[1px] bg-white h-full"></span><span class="w-[2px] bg-black h-full"></span>
-        <span class="w-[1px] bg-white h-full"></span><span class="w-[3px] bg-black h-full"></span>
-        <span class="w-[2px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
-        <span class="w-[1px] bg-black h-full"></span><span class="w-[3px] bg-black h-full"></span>
-        <span class="w-[2px] bg-black h-full"></span><span class="w-[2px] bg-black h-full"></span>
-        <span class="w-[1px] bg-white h-full"></span><span class="w-[3px] bg-black h-full"></span>
-        <span class="w-[1px] bg-white h-full"></span><span class="w-[2px] bg-black h-full"></span>
-        <span class="w-[3px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
-        <span class="w-[2px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
-        <span class="w-[3px] bg-black h-full"></span><span class="w-[2px] bg-black h-full"></span>
-        <span class="w-[1px] bg-white h-full"></span><span class="w-[2px] bg-black h-full"></span>
-        <span class="w-[3px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
-      </div>
-      <span class="text-[8.5px] font-mono tracking-widest text-black font-bold mt-0.5">${escapeHtml(codeStr)}</span>
+    <div class="inline-flex flex-col items-start select-none mb-1">
+      <svg width="${totalW}" height="${height + 14}" viewBox="0 0 ${totalW} ${height + 14}" class="overflow-visible">
+        ${rects}
+        <text x="${(totalW / 2).toFixed(1)}" y="${height + 11}" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="10" font-weight="bold" fill="#000">${escapeHtml(textDisplay)}</text>
+      </svg>
     </div>
   `;
 }
@@ -4289,7 +4327,7 @@ function renderTaxDeclarationPreview() {
     <div class="fns-corner-sq" style="bottom: 8mm; right: 8mm;"></div>
   `;
 
-  // PAGE 1: TITLE
+  // PAGE 1: TITLE (0301 6015, Стр. 001)
   const page1 = `
     <div class="fns-a4-page">
       ${cornerSq}
@@ -4366,7 +4404,7 @@ function renderTaxDeclarationPreview() {
         </div>
         <div class="flex items-center space-x-2">
           <span class="w-48">На страницах:</span>
-          ${renderCells('003', 3)}
+          ${renderCells('004', 3)}
           <span class="ml-4">с приложением документов на:</span>
           ${renderCells('---', 3)}
           <span>листах</span>
@@ -4407,7 +4445,7 @@ function renderTaxDeclarationPreview() {
     </div>
   `;
 
-  // PAGE 2: SECTION 1
+  // PAGE 2: SECTION 1 (0301 6022 или 0301 6039, Стр. 002)
   const barcodeSec1 = is15 ? '0301 6039' : '0301 6022';
   const sec1Heading = is15
     ? 'Раздел 1.2. Сумма налога (авансового платежа по налогу), уплачиваемого в связи с применением упрощенной системы налогообложения (объект налогообложения – доходы, уменьшенные на величину расходов)...'
@@ -4498,11 +4536,11 @@ function renderTaxDeclarationPreview() {
     </div>
   `;
 
-  // PAGE 3: SECTION 2
+  // PAGE 3: SECTION 2 PART 1 (0301 6046 или 0301 6084, Стр. 003)
   const barcodeSec2 = is15 ? '0301 6084' : '0301 6046';
   const sec2Heading = is15
-    ? 'Раздел 2.2. Расчет налога, уплачиваемого в связи с применением упрощенной системы налогообложения (объект – доходы, уменьшенные на величину расходов)...'
-    : 'Раздел 2.1.1. Расчет налога, уплачиваемого в связи с применением упрощенной системы налогообложения (объект налогообложения – доходы)';
+    ? 'Раздел 2.2. Расчет налога, уплачиваемого в связи с применением УСН, и минимального налога (объект – доходы, уменьшенные на величину расходов) — Часть 1'
+    : 'Раздел 2.1.1. Расчет налога, уплачиваемого в связи с применением упрощенной системы налогообложения (объект налогообложения – доходы) — Часть 1';
 
   const page3 = `
     <div class="fns-a4-page">
@@ -4531,10 +4569,12 @@ function renderTaxDeclarationPreview() {
       </div>
 
       <div class="space-y-2 text-[10px]">
-        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
-          <span>Признак налогоплательщика (1 - с работниками, 2 - без) (стр. 102):</span>
-          ${renderCells(d.payer_code || '1', 1)}
-        </div>
+        ${!is15 ? `
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+            <span>Признак налогоплательщика (1 - с работниками, 2 - без) (стр. 102):</span>
+            ${renderCells(d.payer_code || '1', 1)}
+          </div>
+        ` : ''}
 
         <div class="font-bold uppercase tracking-wider text-[9px] pt-1">Сумма полученных доходов нарастающим итогом (руб.):</div>
         <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
@@ -4597,9 +4637,45 @@ function renderTaxDeclarationPreview() {
           <span class="font-bold">За налоговый период / год (${is15 ? 'стр. 273' : 'стр. 133'}):</span>
           ${renderMoneyCells(d.tax_year, 11)}
         </div>
+      </div>
+    </div>
+  `;
 
+  // PAGE 4: SECTION 2 PART 2 (0301 6053 или 0301 6091, Стр. 004)
+  const barcodeSec4 = is15 ? '0301 6091' : '0301 6053';
+  const sec4Heading = is15
+    ? 'Раздел 2.2 (продолжение). Сумма исчисленного минимального налога и страховые взносы ст. 430 НК РФ'
+    : 'Раздел 2.1.1 (продолжение). Страховые взносы и вычеты, уменьшающие налог (стр. 140-162)';
+
+  const page4 = `
+    <div class="fns-a4-page">
+      ${cornerSq}
+
+      <div class="flex items-start justify-between mb-2">
+        ${renderBarcodeHtml(barcodeSec4)}
+        <div class="space-y-1 text-right">
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">ИНН</span>
+            ${renderCells(d.inn, 12)}
+          </div>
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">КПП</span>
+            ${renderCells(isIp ? '' : d.kpp, 9)}
+          </div>
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">Стр.</span>
+            ${renderCells('004', 3)}
+          </div>
+        </div>
+      </div>
+
+      <div class="font-bold text-[10px] leading-tight mb-3 border-b border-black pb-2 uppercase">
+        ${sec4Heading}
+      </div>
+
+      <div class="space-y-2 text-[10px]">
         ${!is15 ? `
-          <div class="font-bold uppercase tracking-wider text-[9px] pt-1">Страховые взносы и вычеты, уменьшающие налог (руб.):</div>
+          <div class="font-bold uppercase tracking-wider text-[9px] pt-1">Сумма страховых взносов, уменьшающая сумму исчисленного налога (руб.):</div>
           <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
             <span>За I квартал (стр. 140):</span>
             ${renderMoneyCells(d.deduct_q1, 11)}
@@ -4613,20 +4689,38 @@ function renderTaxDeclarationPreview() {
             ${renderMoneyCells(d.deduct_q3, 11)}
           </div>
           <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
-            <span class="font-bold">За год (стр. 143):</span>
+            <span class="font-bold">За налоговый период / год (стр. 143):</span>
             ${renderMoneyCells(d.deduct_year, 11)}
           </div>
         ` : `
-          <div class="flex items-center justify-between border-t border-black pt-2 font-bold">
+          <div class="flex items-center justify-between border-b border-black pb-2 font-bold">
             <span>Сумма исчисленного минимального налога за год (стр. 280):</span>
             ${renderMoneyCells(d.min_tax, 11)}
           </div>
         `}
+
+        <div class="font-bold uppercase tracking-wider text-[9px] pt-3">Сумма страховых взносов, установленных статьей 430 НК РФ (для ИП):</div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>В совокупном фиксированном размере (${is15 ? 'стр. 290' : 'стр. 150'}):</span>
+          ${renderMoneyCells(d.ins_fixed, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>В размере 1% с доходов, превышающих 300 тыс. руб. (${is15 ? 'стр. 300' : 'стр. 160'}):</span>
+          ${renderMoneyCells(d.ins_1pct, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>В том числе за расчетный период текущего года (${is15 ? 'стр. 310' : 'стр. 161'}):</span>
+          ${renderMoneyCells(d.ins_1pct_curr, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>За расчетный период предыдущего года (${is15 ? 'стр. 320' : 'стр. 162'}):</span>
+          ${renderMoneyCells(d.ins_1pct_prev, 11)}
+        </div>
       </div>
     </div>
   `;
 
-  container.innerHTML = page1 + page2 + page3;
+  container.innerHTML = page1 + page2 + page3 + page4;
 }
 
 async function downloadTaxDeclarationPdf() {

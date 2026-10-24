@@ -46,7 +46,7 @@ def test_generate_tax_declaration_pdf_usn_6():
     assert pdf_bytes.startswith(b"%PDF-")
 
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    assert doc.page_count == 3
+    assert doc.page_count == 4
 
     # Проверка текста на страницах
     p1_text = doc[0].get_text()
@@ -58,9 +58,12 @@ def test_generate_tax_declaration_pdf_usn_6():
     p3_text = doc[2].get_text()
     assert "0301 6046" in p3_text or "2.1.1" in p3_text
 
+    p4_text = doc[3].get_text()
+    assert "0301 6053" in p4_text or "140" in p4_text
+
 
 def test_generate_tax_declaration_pdf_usn_15():
-    """Проверка генерации бланка УСН 15% (Доходы минус расходы) с штрихкодами 6039 и 6084."""
+    """Проверка генерации бланка УСН 15% (Доходы минус расходы) с штрихкодами 6039, 6084 и 6091."""
     data = {
         "inn": "616400000001",  # 12 digits (ИП)
         "kpp": "",
@@ -89,13 +92,16 @@ def test_generate_tax_declaration_pdf_usn_15():
 
     pdf_bytes = generate_tax_declaration_pdf(data)
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    assert doc.page_count == 3
+    assert doc.page_count == 4
 
     p2_text = doc[1].get_text()
     assert "0301 6039" in p2_text or "1.2" in p2_text
 
     p3_text = doc[2].get_text()
     assert "0301 6084" in p3_text or "2.2" in p3_text
+
+    p4_text = doc[3].get_text()
+    assert "0301 6091" in p4_text or "280" in p4_text
 
 
 def test_get_company_tax_declaration_data():

@@ -2735,11 +2735,14 @@
             Лист 2: Раздел 1 (К уплате)
           </button>
           <button id="btnDeclTabSec2" onclick="switchTaxDeclTab('sec2')" class="px-3 py-1.5 rounded-xl transition text-slate-500 hover:text-slate-800">
-            Лист 3: Раздел 2 (Расчет налога)
+            Лист 3: Раздел 2 (База и налог)
+          </button>
+          <button id="btnDeclTabSec3" onclick="switchTaxDeclTab('sec3')" class="px-3 py-1.5 rounded-xl transition text-slate-500 hover:text-slate-800">
+            Лист 4: Раздел 2 (Взносы)
           </button>
           <button id="btnDeclTabPreview" onclick="switchTaxDeclTab('preview')" class="px-3.5 py-1.5 rounded-xl transition text-slate-500 hover:text-slate-800 flex items-center space-x-1">
             <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-            <span>Бланк ФНС (Оригинал)</span>
+            <span>Бланк ФНС (Оригинал 4 стр.)</span>
           </button>
         </div>
 
@@ -3034,28 +3037,75 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <!-- Deductions row (insurance premiums) -->
-            <div id="declDeductionsSection" class="space-y-2 pt-2 border-t border-slate-100">
+        <!-- ================= TAB 4: РАЗДЕЛ 2 ЧАСТЬ 2 (ВЗНОСЫ И МИН. НАЛОГ) ================= -->
+        <div id="declTabSec3Panel" class="hidden space-y-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-2xs space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h4 id="declSec3Title" class="text-xs font-black text-slate-900 uppercase">Лист 4. Раздел 2 (Часть 2). Страховые взносы и вычеты</h4>
+                <p id="declSec3Sub" class="text-[11px] text-slate-500">Штрих-код 0301 6053 • Взносы, уменьшающие налог, и взносы по ст. 430 НК РФ</p>
+              </div>
+              <span class="text-xs px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg border border-emerald-200">Лист 4</span>
+            </div>
+
+            <!-- Deductions row (insurance premiums paid for employees / personal) -->
+            <div class="space-y-2">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-extrabold text-slate-800">Страховые взносы и вычеты, уменьшающие налог (руб.):</span>
-                <span class="text-[11px] text-slate-400">стр. 140-143</span>
+                <span class="text-xs font-extrabold text-slate-800">Страховые взносы и выплаты работникам, уменьшающие налог (руб.):</span>
+                <span class="text-[11px] text-slate-400">стр. 140-143 (для УСН Доходы)</span>
               </div>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">I квартал (стр. 140)</label>
                   <input id="declDeductQ1" type="number" min="0" oninput="onTaxDeclInputChange('deduct_q1')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
                 </div>
                 <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">Полугодие (стр. 141)</label>
                   <input id="declDeductQ2" type="number" min="0" oninput="onTaxDeclInputChange('deduct_q2')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
                 </div>
                 <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">9 месяцев (стр. 142)</label>
                   <input id="declDeductQ3" type="number" min="0" oninput="onTaxDeclInputChange('deduct_q3')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
                 </div>
                 <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">Год (стр. 143)</label>
                   <input id="declDeductYear" type="number" min="0" oninput="onTaxDeclInputChange('deduct_year')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
                 </div>
               </div>
             </div>
+
+            <!-- Article 430 NK RF insurance premiums (mandatory for individual entrepreneurs) -->
+            <div class="space-y-3 pt-3 border-t border-slate-100">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-slate-800">Страховые взносы ИП, установленные ст. 430 НК РФ (руб.):</span>
+                <span class="text-[11px] text-slate-400">стр. 150-162 (или 290-320)</span>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">В совокупном фиксированном размере (стр. 150 / 290)</label>
+                  <input id="declInsFixed" type="number" min="0" oninput="onTaxDeclInputChange('ins_fixed')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="53658">
+                  <span class="text-[10px] text-slate-400">49 500 руб. (2024 г.) / 53 658 руб. (2025 г.)</span>
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">1% с доходов, превышающих 300 000 руб. (стр. 160 / 300)</label>
+                  <input id="declIns1Pct" type="number" min="0" oninput="onTaxDeclInputChange('ins_1pct')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
+                  <span class="text-[10px] text-slate-400">Рассчитывается: (доход за год - 300 000) × 1%</span>
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">В том числе за текущий год (стр. 161 / 310)</label>
+                  <input id="declIns1PctCurr" type="number" min="0" oninput="onTaxDeclInputChange('ins_1pct_curr')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">За расчетный период предыдущего года (стр. 162 / 320)</label>
+                  <input id="declIns1PctPrev" type="number" min="0" oninput="onTaxDeclInputChange('ins_1pct_prev')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
           </div>
         </div>
 
