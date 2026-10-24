@@ -988,9 +988,97 @@
           </div>
         </div>
 
-        <div></div>
+        <!-- Card 1: Импорт транзакций (перемещен вверх, выпадающий список источников) -->
+        <div class="lg:row-span-2 bg-white rounded-2xl p-6 card-shadow border border-slate-100 space-y-4 flex flex-col justify-between">
+          <div class="space-y-4">
+            <div class="flex items-center space-x-2.5 pb-3 border-b border-slate-100">
+              <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
+                <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-slate-900 font-display">Импорт транзакций</h3>
+                <p class="text-[10px] text-slate-400">Загрузка банковских выписок и синхронизация</p>
+              </div>
+            </div>
+
+            <!-- Выпадающий список выбора источника импорта -->
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 mb-1.5">Источник / формат данных:</label>
+              <select id="cabImportTypeSelect" onchange="onImportSourceChange(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition cursor-pointer">
+                <option value="statement_files" selected>Выписка CSV / 1C / TXT</option>
+                <option value="sberbank">Импорт из Сбербанка</option>
+              </select>
+            </div>
+
+            <!-- Панель 1: Выписка CSV / 1C / TXT -->
+            <div id="importPanelStatementFiles" class="space-y-3">
+              <div class="p-4 border-2 border-dashed border-slate-200 hover:border-emerald-500 rounded-xl bg-slate-50 text-center transition">
+                <input type="file" id="cabPageFileInput" accept=".csv,.txt" class="hidden" onchange="onCabPageFileSelected(this)">
+                <button type="button" onclick="document.getElementById('cabPageFileInput').click()" class="bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 font-bold text-xs px-3.5 py-1.5 rounded-lg transition shadow-sm">
+                  Выбрать файл на диске
+                </button>
+                <div id="cabPageFileName" class="mt-2 text-emerald-700 font-bold text-xs truncate"></div>
+              </div>
+
+              <button onclick="uploadCabPageFile()" id="btnCabPageUpload" disabled class="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-sm">
+                Загрузить и проанализировать выписку
+              </button>
+
+              <div class="pt-1 text-center">
+                <span class="text-[11px] text-slate-400 block mb-1.5 font-medium">Быстрый тест в 1 клик:</span>
+                <div class="grid grid-cols-2 gap-2">
+                  <button onclick="loadDemoStatement('C001')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-1.5 rounded-lg text-xs">
+                    Демо C001
+                  </button>
+                  <button onclick="loadDemoStatement('C004')" class="bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 font-bold py-1.5 rounded-lg text-xs">
+                    Демо C004
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Панель 2: Импорт из Сбербанка (Заглушка) -->
+            <div id="importPanelSberbank" class="hidden space-y-3">
+              <div class="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-2 text-xs">
+                <div class="flex items-center space-x-2">
+                  <div class="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-[10px]">
+                    СБ
+                  </div>
+                  <span class="font-extrabold text-slate-900">СберБизнес (СББОЛ API)</span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  Прямая автоматическая загрузка выписок, остатков и платежных поручений через открытый протокол Сбербанка.
+                </p>
+                <div class="p-2.5 bg-white rounded-lg border border-emerald-100 text-[11px] text-emerald-800 flex items-center space-x-1.5">
+                  <i data-lucide="info" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+                  <span>Интеграция готова к подключению клиентского модуля.</span>
+                </div>
+              </div>
+
+              <button type="button" onclick="handleSberbankImportStub()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-sm flex items-center justify-center space-x-2">
+                <i data-lucide="link" class="w-4 h-4"></i>
+                <span>Подключить выписку Сбербанка</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Экспорт архива операций -->
+          <div class="pt-3 border-t border-slate-100 space-y-1.5">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Экспорт операций:</span>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="download1CExchange()" class="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] py-1.5 px-2 rounded-lg transition flex items-center justify-center space-x-1">
+                <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-500"></i>
+                <span>1С (TXT)</span>
+              </button>
+              <button onclick="downloadOperationsCSV()" class="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] py-1.5 px-2 rounded-lg transition flex items-center justify-center space-x-1">
+                <i data-lucide="file" class="w-3.5 h-3.5 text-slate-500"></i>
+                <span>CSV архив</span>
+              </button>
+            </div>
+          </div>
+        </div>
         
-        <!-- Card 1: Реквизиты бизнеса (2 cols on lg) -->
+        <!-- Card 2: Реквизиты бизнеса (2 cols on lg) -->
         <div class="lg:col-span-2 bg-white rounded-2xl p-6 card-shadow border border-slate-100 space-y-4">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
             <div class="flex items-center space-x-2.5">
@@ -1064,81 +1152,6 @@
               </button>
             </div>
           </form>
-        </div>
-
-        <!-- Card 2: Экспорт для налоговой декларации и банковская выписка -->
-        <div class="space-y-5">
-          
-          <!-- Налоговая выгрузка КУДиР -->
-          <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 space-y-3">
-            <div class="flex items-center space-x-2.5 pb-2 border-b border-slate-100">
-              <div class="w-8 h-8 rounded-xl bg-emerald-100 text-ci-800 flex items-center justify-center font-bold">
-                <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-              </div>
-              <div>
-                <h3 class="text-sm font-black text-slate-900">Налоговая декларация</h3>
-                <p class="text-[10px] text-slate-400">Формирование КУДиР и налоговой базы</p>
-              </div>
-            </div>
-
-            <p class="text-xs text-slate-600 leading-relaxed">
-              Выгрузка с разделением доходов и расходов по ст. 346.15 и 346.16 НК РФ. Исключены собственные переводы между счетами, автоматически рассчитан аванс по налогу (6% и 15%).
-            </p>
-
-            <div class="space-y-2 pt-1">
-              <button onclick="openTaxDeclarationModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl transition shadow-sm flex items-center justify-center space-x-2">
-                <i data-lucide="file-signature" class="w-4 h-4"></i>
-                <span>Создать налоговую декларацию</span>
-              </button>
-              <button onclick="download1CExchange()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center space-x-2">
-                <i data-lucide="file-text" class="w-4 h-4"></i>
-                <span>Выгрузка в 1С:Предприятие (TXT)</span>
-              </button>
-              <button onclick="downloadOperationsCSV()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center space-x-2">
-                <i data-lucide="file" class="w-4 h-4"></i>
-                <span>Полный архив операций (CSV)</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Загрузка выписки -->
-          <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 space-y-3">
-            <div class="flex items-center space-x-2.5 pb-2 border-b border-slate-100">
-              <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
-                <i data-lucide="upload-cloud" class="w-4 h-4"></i>
-              </div>
-              <div>
-                <h3 class="text-sm font-black text-slate-900">Банковская выписка</h3>
-                <p class="text-[10px] text-slate-400">Форматы CSV и 1CClientBankExchange</p>
-              </div>
-            </div>
-
-            <div class="p-4 border-2 border-dashed border-slate-200 hover:border-ci-500 rounded-xl bg-slate-50 text-center transition">
-              <input type="file" id="cabPageFileInput" accept=".csv,.txt" class="hidden" onchange="onCabPageFileSelected(this)">
-              <button type="button" onclick="document.getElementById('cabPageFileInput').click()" class="bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 font-bold text-xs px-3.5 py-1.5 rounded-lg transition shadow-sm">
-                Выбрать файл на диске
-              </button>
-              <div id="cabPageFileName" class="mt-2 text-ci-700 font-bold text-xs truncate"></div>
-            </div>
-
-            <button onclick="uploadCabPageFile()" id="btnCabPageUpload" disabled class="w-full bg-ci-600 disabled:bg-slate-200 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-sm">
-              Загрузить и проанализировать выписку
-            </button>
-
-            <div class="pt-1 text-center">
-              <span class="text-[11px] text-slate-400 block mb-1.5 font-medium">Быстрый тест в 1 клик:</span>
-              <div class="grid grid-cols-2 gap-2">
-                <button onclick="loadDemoStatement('C001')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-1.5 rounded-lg text-xs">
-                  Демо C001
-                </button>
-                <button onclick="loadDemoStatement('C004')" class="bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 font-bold py-1.5 rounded-lg text-xs">
-                  Демо C004
-                </button>
-              </div>
-            </div>
-
-          </div>
-
         </div>
 
         <!-- Card 3: История загрузок выписок (CSV) -->

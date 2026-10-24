@@ -3740,6 +3740,26 @@ async function uploadCabPageFile() {
   startAsyncStatementUpload(state.selectedFile);
 }
 
+function onImportSourceChange(source) {
+  const panelFiles = document.getElementById('importPanelStatementFiles');
+  const panelSber = document.getElementById('importPanelSberbank');
+  if (!panelFiles || !panelSber) return;
+  if (source === 'sberbank') {
+    panelFiles.classList.add('hidden');
+    panelSber.classList.remove('hidden');
+    showToast('Выбран импорт из Сбербанка (СББОЛ)');
+  } else {
+    panelFiles.classList.remove('hidden');
+    panelSber.classList.add('hidden');
+    showToast('Выбран импорт выписки CSV / 1C / TXT');
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function handleSberbankImportStub() {
+  showToast('Сбербанк API: модуль импорта подготавливается...');
+}
+
 function handleLogout() {
   state.authToken = null;
   state.currentUser = null;
@@ -6099,6 +6119,8 @@ window.downloadTaxDeclarationPdf = downloadTaxDeclarationPdf;
 window.printTaxDeclaration = printTaxDeclaration;
 window.switchFnsSubTab = switchFnsSubTab;
 window.renderFnsTaxesSubTab = renderFnsTaxesSubTab;
+window.onImportSourceChange = onImportSourceChange;
+window.handleSberbankImportStub = handleSberbankImportStub;
 
 
 
