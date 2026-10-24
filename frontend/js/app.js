@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   applyNavbarCustomization();
   await loadUserProfile();
   await loadCompaniesList();
+  await loadCategories();
 });
 
 // Toast Helper
@@ -2002,9 +2003,9 @@ const AVAILABLE_CATEGORY_ICONS = [
 ];
 
 async function loadCategories() {
-  if (!state.currentCompanyId) return;
+  const compId = state.currentCompanyId || localStorage.getItem('ci_radar_company_id') || 'C001';
   try {
-    const res = await fetch(`/api/companies/${state.currentCompanyId}/categories`, {
+    const res = await fetch(`/api/companies/${compId}/categories`, {
       headers: getAuthHeaders()
     });
     if (res.ok) {
@@ -5309,6 +5310,7 @@ function switchCabinetSubTab(subTabName) {
     'slots': { btn: 'btnCabSubSlots', content: 'tabContentPlanFact' },
     'analytics': { btn: 'btnCabSubAnalytics', content: 'tabContentAnalytics' },
     'integrations': { btn: 'btnCabSubIntegrations', content: 'tabContentIntegrations' },
+    'categories': { btn: 'btnCabSubCategories', content: 'cabSectionCategories' },
     'nav': { btn: 'btnCabSubNav', content: 'cabSectionNav' }
   };
 
@@ -5339,6 +5341,9 @@ function switchCabinetSubTab(subTabName) {
     loadAnalytics();
   } else if (subTabName === 'integrations') {
     loadIntegrations();
+  } else if (subTabName === 'categories') {
+    renderCategoriesTable();
+    loadCategories();
   } else if (subTabName === 'nav') {
     syncNavbarTogglesUI();
   }
