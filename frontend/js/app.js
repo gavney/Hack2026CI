@@ -3910,6 +3910,179 @@ function switchCabinetSubTab(subTabName) {
   lucide.createIcons();
 }
 
+// ---------------- FNS & Taxes Sub-tab Switching ----------------
+function switchFnsSubTab(subTabName) {
+  state.activeFnsSubTab = subTabName;
+  const btnCp = document.getElementById('btnFnsSubCounterparties');
+  const btnTaxes = document.getElementById('btnFnsSubTaxes');
+  const contentCp = document.getElementById('fnsSubContentCounterparties');
+  const contentTaxes = document.getElementById('fnsSubContentTaxes');
+
+  if (subTabName === 'taxes') {
+    if (btnCp) btnCp.className = 'cab-sub-inactive px-4 py-2 rounded-xl transition flex items-center space-x-2';
+    if (btnTaxes) btnTaxes.className = 'cab-sub-active px-4 py-2 rounded-xl transition flex items-center space-x-2 shadow-xs';
+    if (contentCp) contentCp.classList.add('hidden');
+    if (contentTaxes) contentTaxes.classList.remove('hidden');
+    renderFnsTaxesSubTab();
+  } else {
+    if (btnCp) btnCp.className = 'cab-sub-active px-4 py-2 rounded-xl transition flex items-center space-x-2 shadow-xs';
+    if (btnTaxes) btnTaxes.className = 'cab-sub-inactive px-4 py-2 rounded-xl transition flex items-center space-x-2';
+    if (contentCp) contentCp.classList.remove('hidden');
+    if (contentTaxes) contentTaxes.classList.add('hidden');
+    loadCounterparties();
+  }
+  lucide.createIcons();
+}
+
+async function renderFnsTaxesSubTab() {
+  if (!state.currentCompanyId) return;
+
+  // Make sure future events are loaded (which include tax_calendar)
+  if (!state.futureEvents || state.futureEvents.length === 0) {
+    try {
+      const evRes = await fetch(`/api/companies/${state.currentCompanyId}/events`, { headers: getAuthHeaders() });
+      if (evRes.ok) state.futureEvents = await evRes.json();
+    } catch (e) {
+      console.warn('Could not load events for taxes subtab:', e);
+    }
+  }
+
+  const c = state.companyInfo || {};
+  const regime = c.tax_regime || 'УСН Доходы 6%';
+  const legalForm = (c.legal_form || 'ИП').toUpperCase();
+  const isIp = legalForm.includes('ИП');
+
+  // Update header badges
+  const badgeRegime = document.getElementById('fnsTaxRegimeBadge');
+  if (badgeRegime) badgeRegime.innerText = regime;
+  const badgeLegal = document.getElementById('fnsTaxLegalFormBadge');
+  if (badgeLegal) badgeLegal.innerText = c.legal_form || 'ИП';
+
+  // Update formula note
+  const formulaNote = document.getElementById('fnsTaxFormulaNote');
+  if (formulaNote) {
+    if (regime.includes('15')) {
+      formulaNote.innerText = 'УСН «Доходы минус расходы» 15%: налог рассчитывается как (Доходы − Расходы за квартал) × 15%. Уведомления до 25 числа, уплата до 28 числа (с переносом с выходных).';
+    } else if (regime.includes('НДС') || regime.includes('ОСНО')) {
+      formulaNote.innerText = 'ОСНО с НДС 22%: платежи производятся равными долями по 1/3 суммы до 28 числа каждого месяца (с переносом с выходных дней на рабочий день).';
+    } else {
+      formulaNote.innerText = 'УСН «Доходы» 6%: налог рассчитывается как Доход за квартал × 6%. Уведомления подаются до 25 числа, уплата до 28 числа (с переносом с выходных).';
+    }
+  }
+
+  // Filter tax calendar events
+  const taxEvents = (state.futureEvents || []).filter(ev =>
+    ev.source === 'tax_calendar' || (ev.note && ev.note.includes('Налоги по УСН/НДС'))
+  );
+
+  // Sort by date ascending
+  taxEvents.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+
+  // Calculate KPIs
+  const kpiRegime = document.getElementById('fnsKpiRegimeName');
+  if (kpiRegime) kpiRegime.innerText = regime;
+
+  const totalAccrued = taxEvents.reduce((sum, ev) => sum + Math.abs(ev.amount || 0), 0);
+  const kpiTotal = document.getElementById('fnsKpiTotalAccrued');
+  if (kpiTotal) kpiTotal.innerText = `${formatMoney(totalAccrued)} ₽`;
+
+  const kpiDeclDue = document.getElementById('fnsKpiDeclarationDue');
+  if (kpiDeclDue) {
+    kpiDeclDue.innerText = isIp ? 'до 25 апреля (для ИП)' : 'до 25 марта (для ООО)';
+  }
+
+  // Next payment
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const upcoming = taxEvents.filter(ev => ev.event_date >= todayStr && Math.abs(ev.amount || 0) > 0);
+  const nextEv = upcoming.length > 0 ? upcoming[0] : (taxEvents.length > 0 ? taxEvents[0] : null);
+  const kpiNext = document.getElementById('fnsKpiNextPayment');
+  if (kpiNext) {
+    if (nextEv) {
+      kpiNext.innerText = `${formatDate(nextEv.event_date)} • ${formatMoney(Math.abs(nextEv.amount || 0))} ₽`;
+    } else {
+      kpiNext.innerText = 'Все выплачено';
+    }
+  }
+
+  const countBadge = document.getElementById('fnsTaxEventsCount');
+  if (countBadge) countBadge.innerText = taxEvents.length;
+
+  const container = document.getElementById('fnsTaxEventsList');
+  if (!container) return;
+
+  if (taxEvents.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+        <i data-lucide="calculator" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+        <div class="font-extrabold text-xs text-slate-700">Налоговые события формируются автоматически</div>
+        <p class="text-[11px] text-slate-400 mt-1 max-w-md mx-auto">
+          При добавлении операций или загрузке банковской выписки система автоматически рассчитает авансовые платежи УСН 6% / 15% и НДС 22% по кварталам со сдвигом с выходных дней.
+        </p>
+      </div>
+    `;
+    lucide.createIcons();
+    return;
+  }
+
+  container.innerHTML = taxEvents.map(ev => {
+    const absAmt = Math.abs(ev.amount || 0);
+    const isNotice = absAmt === 0 || (ev.title && ev.title.toLowerCase().includes('уведомлен'));
+    const isDeclaration = ev.title && ev.title.toLowerCase().includes('декларац');
+    const isNds = ev.title && ev.title.includes('НДС');
+
+    // Parse note for details
+    let noteText = ev.note || '';
+    noteText = noteText.replace(/^Налоги по УСН\/НДС\s*\|\s*/, '');
+
+    const badgeTitle = isDeclaration ? 'Декларация за год' : (isNotice ? 'Уведомление об исчисленных суммах' : (isNds ? 'Уплата 1/3 НДС' : 'Уплата авансового платежа'));
+
+    return `
+      <div class="p-3.5 rounded-xl border border-purple-200 bg-purple-50/40 hover:bg-purple-50 transition flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-900 border border-purple-300 flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
+            <i data-lucide="${isDeclaration ? 'file-signature' : (isNotice ? 'bell' : 'landmark')}" class="w-5 h-5 text-purple-700"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+              <span class="text-xs font-black text-slate-900">${ev.title}</span>
+              <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 flex items-center space-x-1 shadow-2xs">
+                <i data-lucide="landmark" class="w-3 h-3 text-purple-700"></i>
+                <span>Налоги по УСН/НДС</span>
+              </span>
+              <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full ${isNotice ? 'bg-blue-100 text-blue-900 border border-blue-200' : 'bg-emerald-100 text-emerald-900 border border-emerald-200'}">
+                ${badgeTitle}
+              </span>
+            </div>
+            <div class="text-[11px] text-purple-900 mt-1 flex items-center space-x-2 flex-wrap">
+              <span>Срок: <b class="text-slate-900">${formatDate(ev.event_date)}</b></span>
+              <span>•</span>
+              <span>Получатель: <b>ФНС России (ЕНС)</b></span>
+              <span>•</span>
+              <span class="text-slate-500">${noteText}</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center space-x-3">
+          <div class="text-right">
+            <div class="text-sm font-black text-purple-950 font-display">
+              ${absAmt > 0 ? '− ' + formatMoney(absAmt) + ' ₽' : '<span class="text-xs text-purple-700 font-bold">0.00 ₽ (уведомление)</span>'}
+            </div>
+            <span class="text-[10px] font-bold text-purple-700">
+              100% • Обязательный платеж
+            </span>
+          </div>
+          <button onclick="openTaxDeclarationStubModal()" title="Сформировать налоговую декларацию" class="bg-white hover:bg-purple-100 text-purple-900 border border-purple-300 px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-2xs">
+            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">Декларация</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  lucide.createIcons();
+}
+
 // ---------------- Main Tab Switching Logic ----------------
 function switchTab(tabName) {
   // If user clicks Slots / Analytics / Integrations, direct them smoothly to that section inside Cabinet
@@ -3927,6 +4100,9 @@ function switchTab(tabName) {
     switchTab('cabinet');
     switchCabinetSubTab('integrations');
     return;
+  }
+  if (tabName === 'fns') {
+    tabName = 'counterparties';
   }
 
   state.activeTab = tabName;
@@ -3977,7 +4153,11 @@ function switchTab(tabName) {
   } else if (tabName === 'operations') {
     loadOperations();
   } else if (tabName === 'counterparties') {
-    loadCounterparties();
+    if (state.activeFnsSubTab === 'taxes') {
+      renderFnsTaxesSubTab();
+    } else {
+      loadCounterparties();
+    }
   } else if (tabName === 'scenarios') {
     if (state.activeScenarioId) {
       selectScenario(state.activeScenarioId);
@@ -4899,6 +5079,8 @@ window.onCounterpartyInnInput = onCounterpartyInnInput;
 window.populateCounterpartiesDropdowns = populateCounterpartiesDropdowns;
 window.openTaxDeclarationStubModal = openTaxDeclarationStubModal;
 window.closeTaxDeclarationStubModal = closeTaxDeclarationStubModal;
+window.switchFnsSubTab = switchFnsSubTab;
+window.renderFnsTaxesSubTab = renderFnsTaxesSubTab;
 
 
 

@@ -289,9 +289,9 @@
         <button onclick="switchTab('integrations')" id="pill-integrations" class="pill-inactive px-3.5 py-1.5 rounded-xl transition hidden">
           1С / ФНС
         </button>
-        <button onclick="switchTab('counterparties')" id="pill-counterparties" class="pill-inactive px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1">
-          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-500"></i>
-          <span>Контрагенты ФНС</span>
+        <button onclick="switchTab('counterparties')" id="pill-counterparties" class="pill-inactive px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1.5">
+          <i data-lucide="landmark" class="w-3.5 h-3.5 text-emerald-500"></i>
+          <span>ФНС и налоги</span>
           <span id="counterpartyRiskBadge" class="hidden text-[10px] bg-red-500 text-white px-1.5 py-0.2 rounded-full font-bold">!</span>
         </button>
         <button onclick="switchTab('cabinet')" id="pill-cabinet" class="pill-inactive px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1.5 text-ci-700 font-bold">
@@ -669,110 +669,231 @@
 
     <!-- Slots, Analytics (DDS), Integrations (1C/FNS) moved into Cabinet (tabContentCabinet) to unclutter the interface -->
 
-    <!-- ================= TAB: COUNTERPARTIES & FNS ANALYSIS (nalogbi + check) ================= -->
+    <!-- ================= TAB: ОБЩИЙ РАЗДЕЛ ФНС И НАЛОГОВ (Контрагенты + Налоги + Декларации) ================= -->
     <div id="tabContentCounterparties" class="hidden space-y-5">
       
-      <!-- Compact Header with Action Buttons -->
+      <!-- General Section Header -->
       <div class="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-200">
         <div>
-          <h2 class="text-lg font-black text-slate-900 font-display">Контрагенты и ФНС</h2>
-          <p class="text-xs text-slate-400">Проверка блокировок счетов (ст. 76 НК РФ) и факторов риска дебиторов</p>
-        </div>
-        <div class="flex items-center space-x-2">
-          <button onclick="openAddCounterpartyModal()" class="bg-ci-600 hover:bg-ci-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5 shadow-sm">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            <span>+ Контрагент</span>
-          </button>
-          <button onclick="analyzeAllCounterparties()" id="btnCheckAllFns" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5 border border-slate-200">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-ci-600"></i>
-            <span>Проверить всех</span>
-          </button>
-          <button onclick="openFnsApiKeyModal()" id="btnFnsKeyStatus" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-2 border border-slate-200">
-            <span id="fnsKeyStatusDot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span id="fnsKeyStatusLabel">Ключ ФНС</span>
-          </button>
+          <h2 class="text-lg sm:text-xl font-black text-slate-900 font-display flex items-center space-x-2">
+            <i data-lucide="landmark" class="w-5 h-5 text-ci-600"></i>
+            <span>ФНС и налоговый контроль</span>
+          </h2>
+          <p class="text-xs text-slate-500">Проверка благонадежности контрагентов (ст. 76 НК РФ), расчет налоговых обязательств и декларации</p>
         </div>
       </div>
 
-      <!-- 4 Compact KPI Cards -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div class="bg-white rounded-xl p-3 border border-slate-200 card-shadow">
-          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">В реестре</span>
-          <div id="kpiCpTotal" class="text-lg font-black text-slate-900 font-display">0</div>
-        </div>
-        <div class="bg-white rounded-xl p-3 border border-slate-200 card-shadow">
-          <span class="text-[10px] uppercase font-bold text-emerald-600 block mb-0.5">Проверено в ФНС</span>
-          <div id="kpiCpChecked" class="text-lg font-black text-emerald-700 font-display">0</div>
-        </div>
-        <div class="bg-white rounded-xl p-3 border border-red-200 bg-red-50/50 card-shadow">
-          <span class="text-[10px] uppercase font-bold text-red-600 block mb-0.5">Блокировки (ст. 76)</span>
-          <div id="kpiCpBlocked" class="text-lg font-black text-red-700 font-display">0</div>
-        </div>
-        <div class="bg-white rounded-xl p-3 border border-amber-200 bg-amber-50/50 card-shadow">
-          <span class="text-[10px] uppercase font-bold text-amber-700 block mb-0.5">В зоне риска</span>
-          <div id="kpiCpAtRiskSum" class="text-lg font-black text-amber-800 font-display">0 ₽</div>
-        </div>
+      <!-- FNS Sub-Navigation Bar -->
+      <div class="flex items-center space-x-1.5 p-1.5 bg-slate-100 rounded-2xl text-xs font-bold border border-slate-200 overflow-x-auto hide-scrollbar">
+        <button onclick="switchFnsSubTab('counterparties')" id="btnFnsSubCounterparties" class="cab-sub-active px-4 py-2 rounded-xl transition flex items-center space-x-2 shadow-xs">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+          <span>Контрагенты и ФНС</span>
+        </button>
+        <button onclick="switchFnsSubTab('taxes')" id="btnFnsSubTaxes" class="cab-sub-inactive px-4 py-2 rounded-xl transition flex items-center space-x-2">
+          <i data-lucide="receipt" class="w-4 h-4 text-purple-600"></i>
+          <span>Налоги и декларации</span>
+        </button>
       </div>
 
-      <!-- TABLE & FILTERS CARD -->
-      <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
-        
-        <!-- Controls Bar -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 mb-4 gap-3">
-          <!-- Search -->
-          <div class="relative flex-1 max-w-sm">
-            <input type="text" id="cpSearchInput" oninput="filterCounterpartiesTable()" placeholder="Поиск по наименованию или ИНН..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-              <i data-lucide="search" class="w-3.5 h-3.5"></i>
+      <!-- SUB-TAB 1: КОНТРАГЕНТЫ И ФНС -->
+      <div id="fnsSubContentCounterparties" class="space-y-4">
+        <!-- Action Buttons Bar -->
+        <div class="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-100">
+          <div>
+            <h3 class="text-sm font-extrabold text-slate-800">Реестр контрагентов</h3>
+            <p class="text-[11px] text-slate-400">Проверка блокировок счетов и факторов риска дебиторов через ФНС</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="openAddCounterpartyModal()" class="bg-ci-600 hover:bg-ci-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5 shadow-sm">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>+ Контрагент</span>
+            </button>
+            <button onclick="analyzeAllCounterparties()" id="btnCheckAllFns" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5 border border-slate-200">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-ci-600"></i>
+              <span>Проверить всех</span>
+            </button>
+            <button onclick="openFnsApiKeyModal()" id="btnFnsKeyStatus" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-2 border border-slate-200">
+              <span id="fnsKeyStatusDot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span id="fnsKeyStatusLabel">Ключ ФНС</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Compact KPI Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-white rounded-xl p-3 border border-slate-200 card-shadow">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">В реестре</span>
+            <div id="kpiCpTotal" class="text-lg font-black text-slate-900 font-display">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-3 border border-slate-200 card-shadow">
+            <span class="text-[10px] uppercase font-bold text-emerald-600 block mb-0.5">Проверено в ФНС</span>
+            <div id="kpiCpChecked" class="text-lg font-black text-emerald-700 font-display">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-3 border border-red-200 bg-red-50/50 card-shadow">
+            <span class="text-[10px] uppercase font-bold text-red-600 block mb-0.5">Блокировки (ст. 76)</span>
+            <div id="kpiCpBlocked" class="text-lg font-black text-red-700 font-display">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-3 border border-amber-200 bg-amber-50/50 card-shadow">
+            <span class="text-[10px] uppercase font-bold text-amber-700 block mb-0.5">В зоне риска</span>
+            <div id="kpiCpAtRiskSum" class="text-lg font-black text-amber-800 font-display">0 ₽</div>
+          </div>
+        </div>
+
+        <!-- TABLE & FILTERS CARD -->
+        <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 mb-4 gap-3">
+            <div class="relative flex-1 max-w-sm">
+              <input type="text" id="cpSearchInput" oninput="filterCounterpartiesTable()" placeholder="Поиск по наименованию или ИНН..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                <i data-lucide="search" class="w-3.5 h-3.5"></i>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-1.5 overflow-x-auto text-[11px] font-bold">
+              <button onclick="setCpFilter('all')" id="cpFilter-all" class="bg-emerald-600 text-white px-2.5 py-1.5 rounded-xl transition shadow-xs">
+                Все (<span id="cpCountAll">0</span>)
+              </button>
+              <button onclick="setCpFilter('payer')" id="cpFilter-payer" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-xl transition">
+                Дебиторы
+              </button>
+              <button onclick="setCpFilter('supplier')" id="cpFilter-supplier" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-xl transition">
+                Поставщики
+              </button>
+              <button onclick="setCpFilter('blocked')" id="cpFilter-blocked" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-2.5 py-1.5 rounded-xl transition flex items-center space-x-1">
+                <span>⛔ Заблокированы</span>
+                <span id="cpCountBlocked" class="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full">0</span>
+              </button>
+              <button onclick="setCpFilter('risk')" id="cpFilter-risk" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1.5 rounded-xl transition">
+                ⚠️ Зона риска
+              </button>
             </div>
           </div>
 
-          <!-- Filter Pills -->
-          <div class="flex items-center space-x-1.5 overflow-x-auto text-[11px] font-bold">
-            <button onclick="setCpFilter('all')" id="cpFilter-all" class="bg-emerald-600 text-white px-2.5 py-1.5 rounded-xl transition shadow-xs">
-              Все (<span id="cpCountAll">0</span>)
-            </button>
-            <button onclick="setCpFilter('payer')" id="cpFilter-payer" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-xl transition">
-              Дебиторы
-            </button>
-            <button onclick="setCpFilter('supplier')" id="cpFilter-supplier" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-xl transition">
-              Поставщики
-            </button>
-            <button onclick="setCpFilter('blocked')" id="cpFilter-blocked" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-2.5 py-1.5 rounded-xl transition flex items-center space-x-1">
-              <span>⛔ Заблокированы</span>
-              <span id="cpCountBlocked" class="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full">0</span>
-            </button>
-            <button onclick="setCpFilter('risk')" id="cpFilter-risk" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1.5 rounded-xl transition">
-              ⚠️ Зона риска
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="text-[11px] font-extrabold uppercase text-slate-400 border-b border-slate-100 pb-2">
+                  <th class="py-2.5 px-3">Контрагент</th>
+                  <th class="py-2.5 px-3">Роль</th>
+                  <th class="py-2.5 px-3 text-right">Оборот</th>
+                  <th class="py-2.5 px-3">Статус ФНС (nalogbi + check)</th>
+                  <th class="py-2.5 px-3 text-center" title="Учитывать влияние риска неплатежа этого контрагента на прогноз Радара">
+                    Учитывать в графике
+                  </th>
+                  <th class="py-2.5 px-3 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody id="counterpartiesTableBody" class="divide-y divide-slate-100">
+                <tr>
+                  <td colspan="6" class="text-center py-8 text-slate-400">
+                    <div class="animate-spin w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+                    Загрузка контрагентов...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUB-TAB 2: НАЛОГИ И ДЕКЛАРАЦИИ -->
+      <div id="fnsSubContentTaxes" class="hidden space-y-4">
+        
+        <!-- Tax Regime Banner & Declaration Action Button -->
+        <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center space-x-2">
+              <span id="fnsTaxRegimeBadge" class="px-2.5 py-1 rounded-lg bg-purple-100 text-purple-900 font-extrabold text-xs border border-purple-200">
+                УСН «Доходы» 6%
+              </span>
+              <span id="fnsTaxLegalFormBadge" class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200">
+                ИП
+              </span>
+            </div>
+            <h3 class="text-base font-black text-slate-900 font-display">Налоговый календарь и обязательства</h3>
+            <p id="fnsTaxFormulaNote" class="text-xs text-slate-500">
+              Расчет: доход за квартал × 6%. Уведомления подаются до 25 числа, уплата до 28 числа (с переносом с выходных).
+            </p>
+          </div>
+          <div class="shrink-0 flex items-center space-x-2">
+            <button onclick="openTaxDeclarationStubModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center space-x-2 shadow-sm">
+              <i data-lucide="file-signature" class="w-4 h-4"></i>
+              <span>Создать налоговую декларацию</span>
             </button>
           </div>
         </div>
 
-        <!-- Table -->
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead>
-              <tr class="text-[11px] font-extrabold uppercase text-slate-400 border-b border-slate-100 pb-2">
-                <th class="py-2.5 px-3">Контрагент</th>
-                <th class="py-2.5 px-3">Роль</th>
-                <th class="py-2.5 px-3 text-right">Оборот</th>
-                <th class="py-2.5 px-3">Статус ФНС (nalogbi + check)</th>
-                <th class="py-2.5 px-3 text-center" title="Учитывать влияние риска неплатежа этого контрагента на прогноз Радара">
-                  Учитывать в графике
-                </th>
-                <th class="py-2.5 px-3 text-right">Действия</th>
-              </tr>
-            </thead>
-            <tbody id="counterpartiesTableBody" class="divide-y divide-slate-100">
-              <!-- Populated dynamically via renderCounterpartiesTable() -->
-              <tr>
-                <td colspan="6" class="text-center py-8 text-slate-400">
-                  <div class="animate-spin w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full mx-auto mb-2"></div>
-                  Загрузка контрагентов...
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- 4 Tax KPI Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-white rounded-xl p-3 border border-slate-200 card-shadow">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Система налогообложения</span>
+            <div id="fnsKpiRegimeName" class="text-sm font-black text-slate-900 truncate">УСН 6%</div>
+          </div>
+          <div class="bg-white rounded-xl p-3 border border-purple-200 bg-purple-50/50 card-shadow">
+            <span class="text-[10px] uppercase font-bold text-purple-700 block mb-0.5">Ближайший платеж</span>
+            <div id="fnsKpiNextPayment" class="text-sm font-black text-purple-950 font-display">—</div>
+          </div>
+          <div class="bg-white rounded-xl p-3 border border-emerald-200 bg-emerald-50/50 card-shadow">
+            <span class="text-[10px] uppercase font-bold text-emerald-700 block mb-0.5">Начислено налогов за год</span>
+            <div id="fnsKpiTotalAccrued" class="text-base font-black text-emerald-950 font-display">0.00 ₽</div>
+          </div>
+          <div class="bg-white rounded-xl p-3 border border-slate-200 card-shadow">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Срок сдачи декларации</span>
+            <div id="fnsKpiDeclarationDue" class="text-xs font-black text-slate-800 mt-1">до 25 апреля (ИП)</div>
+          </div>
+        </div>
+
+        <!-- Tax Calendar Reference Guidelines Banner -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="font-extrabold text-slate-900 flex items-center space-x-1.5">
+              <i data-lucide="calendar" class="w-4 h-4 text-ci-600"></i>
+              <span>Правила и сроки налогового календаря (ФНС России)</span>
+            </div>
+            <span class="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+              Перенос с выходных включен
+            </span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-[11px] text-slate-600">
+            <div>
+              <div class="font-bold text-slate-800 mb-1">УСН (авансовые платежи и уведомления):</div>
+              <ul class="list-disc pl-4 space-y-0.5">
+                <li><b>I квартал:</b> уведомление до 25 апреля, уплата до 28 апреля</li>
+                <li><b>II квартал:</b> уведомление до 25 июля, уплата до 28 июля</li>
+                <li><b>III квартал:</b> уведомление до 25 октября, уплата до 28 октября</li>
+                <li><b>IV квартал:</b> отдельно не платится (засчитывается в годовой налог)</li>
+                <li><b>Год:</b> декларация до 25 мар (ООО) / 25 апр (ИП), уплата до 28 мар (ООО) / 28 апр (ИП)</li>
+              </ul>
+            </div>
+            <div>
+              <div class="font-bold text-slate-800 mb-1">НДС и правила расчета:</div>
+              <ul class="list-disc pl-4 space-y-0.5">
+                <li><b>НДС (ОСНО):</b> уплата 1/3 ежемесячно до 28 числа</li>
+                <li><b>УСН 6%:</b> доход за квартал × 6%</li>
+                <li><b>УСН 15%:</b> (доход − расход за квартал) × 15%</li>
+                <li><b>НДС по умолчанию:</b> 22% (если не указана иная ставка)</li>
+                <li><i>Важно: если дата выпадает на сб/вс, она автоматически сдвигается на ближайший рабочий день!</i></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tax Payments & Notifications Registry -->
+        <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 space-y-3">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+              <h3 class="text-sm font-black text-slate-900 font-display">Плановые налоговые уведомления и платежи</h3>
+              <span id="fnsTaxEventsCount" class="text-[10px] bg-purple-100 text-purple-900 font-extrabold px-2 py-0.5 rounded-full">0</span>
+            </div>
+            <div class="text-[11px] text-slate-400">
+              Автоматический пересчет при каждом изменении транзакций
+            </div>
+          </div>
+
+          <div id="fnsTaxEventsList" class="space-y-2">
+            <!-- Populated dynamically via renderFnsTaxesSubTab() -->
+          </div>
         </div>
 
       </div>
