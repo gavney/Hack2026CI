@@ -26,6 +26,7 @@ from backend.routers.auth import get_current_user_optional, get_current_user_req
 from backend.routers.scenarios import DEFAULT_SCENARIOS
 from backend.routers.integrations import DEFAULT_INTEGRATION_CONFIGS
 from backend.core.cleaning import parse_operations_csv
+from backend.core.statement_parsers import parse_any_statement, InvoiceParser, ContractParser
 from backend.core.categorizer import classify_operation
 from backend.core.slots import detect_recurring_slots, infer_tax_regime
 
@@ -335,27 +336,33 @@ def execute_statement_pipeline(
         data.update(kwargs)
         STATEMENT_TASKS[task_id].update(data)
 
-    update_task("parsing", "Определение кодировки и чтение структуры файла...", 10)
+    update_task("parsing", "Определение формата (Сбербанк PDF, 1C TXT, CSV, Excel)...", 10)
 
-    # 1. Decode text
-    text_content = None
-    for enc in ["utf-8-sig", "utf-8", "cp1251", "windows-1251"]:
-        try:
-            text_content = content_bytes.decode(enc)
-            break
-        except Exception:
-            pass
+    from backend.database import SessionLocal
 
-    if not text_content:
-        raise ValueError("Не удалось распознать кодировку файла. Поддерживаются UTF-8 и Windows-1251.")
+    # Get company INN and initial balance if available
+    comp_inn = None
+    comp_bal = 0.0
+    try:
+        tmp_db = SessionLocal()
+        c_obj = tmp_db.query(Company).filter(Company.id == company_id).first()
+        if c_obj:
+            comp_inn = c_obj.inn
+            comp_bal = c_obj.last_balance or 0.0
+        tmp_db.close()
+    except Exception:
+        pass
 
-    update_task("parsing", "Разбор строк выписки и нормализация колонок...", 20)
-
-    buffer = io.StringIO(text_content)
-    clean_df, qr = parse_operations_csv(buffer)
+    update_task("parsing", "Разбор транзакций, анонимизация ПДн и извлечение НДС...", 20)
+    clean_df, qr = parse_any_statement(
+        content_bytes=content_bytes,
+        filename=filename,
+        company_inn=comp_inn,
+        initial_balance=comp_bal
+    )
 
     if clean_df.empty:
-        raise ValueError("Файл выписки не содержит валидных операций")
+        raise ValueError(f"Файл выписки '{filename}' не содержит распознанных операций.")
 
     total_rows = len(clean_df)
     update_task("cleaning", f"Проверено {total_rows:,} операций. Дедупликация и валидация ИНН...", 30, total_rows=total_rows)

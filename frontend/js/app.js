@@ -3757,7 +3757,26 @@ function onImportSourceChange(source) {
 }
 
 function handleSberbankImportStub() {
-  showToast('Сбербанк API: модуль импорта подготавливается...');
+  showToast('Сбербанк API: модуль прямого подключения к СББОЛ подготавливается...');
+}
+
+function onCabSberFileSelected(input) {
+  if (input.files && input.files[0]) {
+    state.selectedFile = input.files[0];
+    const nameEl = document.getElementById('cabSberFileName');
+    const submitBtn = document.getElementById('btnCabSberUpload');
+    if (nameEl) nameEl.innerText = `Файл Сбера: ${state.selectedFile.name} (${(state.selectedFile.size / 1024).toFixed(1)} КБ)`;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('bg-slate-200');
+      submitBtn.classList.add('bg-emerald-600');
+    }
+  }
+}
+
+async function uploadCabSberFile() {
+  if (!state.selectedFile) return;
+  startAsyncStatementUpload(state.selectedFile);
 }
 
 function handleLogout() {
@@ -6121,6 +6140,8 @@ window.switchFnsSubTab = switchFnsSubTab;
 window.renderFnsTaxesSubTab = renderFnsTaxesSubTab;
 window.onImportSourceChange = onImportSourceChange;
 window.handleSberbankImportStub = handleSberbankImportStub;
+window.onCabSberFileSelected = onCabSberFileSelected;
+window.uploadCabSberFile = uploadCabSberFile;
 
 
 

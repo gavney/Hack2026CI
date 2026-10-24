@@ -1013,11 +1013,12 @@
             <!-- Панель 1: Выписка CSV / 1C / TXT -->
             <div id="importPanelStatementFiles" class="space-y-3">
               <div class="p-4 border-2 border-dashed border-slate-200 hover:border-emerald-500 rounded-xl bg-slate-50 text-center transition">
-                <input type="file" id="cabPageFileInput" accept=".csv,.txt" class="hidden" onchange="onCabPageFileSelected(this)">
+                <input type="file" id="cabPageFileInput" accept=".csv,.txt,.pdf,.xlsx,.xls" class="hidden" onchange="onCabPageFileSelected(this)">
                 <button type="button" onclick="document.getElementById('cabPageFileInput').click()" class="bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 font-bold text-xs px-3.5 py-1.5 rounded-lg transition shadow-sm">
-                  Выбрать файл на диске
+                  Выбрать файл выписки на диске
                 </button>
                 <div id="cabPageFileName" class="mt-2 text-emerald-700 font-bold text-xs truncate"></div>
+                <p class="text-[10px] text-slate-400 mt-1">Поддерживаются CSV, 1CClientBankExchange (TXT), PDF и Excel</p>
               </div>
 
               <button onclick="uploadCabPageFile()" id="btnCabPageUpload" disabled class="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-sm">
@@ -1037,27 +1038,37 @@
               </div>
             </div>
 
-            <!-- Панель 2: Импорт из Сбербанка (Заглушка) -->
+            <!-- Панель 2: Импорт из Сбербанка -->
             <div id="importPanelSberbank" class="hidden space-y-3">
-              <div class="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-2 text-xs">
+              <div class="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-2 text-xs">
                 <div class="flex items-center space-x-2">
                   <div class="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-[10px]">
                     СБ
                   </div>
-                  <span class="font-extrabold text-slate-900">СберБизнес (СББОЛ API)</span>
+                  <span class="font-extrabold text-slate-900">Выписка Сбербанка (PDF / TXT / СББОЛ)</span>
                 </div>
                 <p class="text-[11px] text-slate-600 leading-relaxed">
-                  Прямая автоматическая загрузка выписок, остатков и платежных поручений через открытый протокол Сбербанка.
+                  Автоматический парсинг выписки Сбера с извлечением НДС, сопоставлением контрагентов и анонимизацией ПДн.
                 </p>
-                <div class="p-2.5 bg-white rounded-lg border border-emerald-100 text-[11px] text-emerald-800 flex items-center space-x-1.5">
-                  <i data-lucide="info" class="w-4 h-4 text-emerald-600 shrink-0"></i>
-                  <span>Интеграция готова к подключению клиентского модуля.</span>
-                </div>
               </div>
 
-              <button type="button" onclick="handleSberbankImportStub()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-sm flex items-center justify-center space-x-2">
-                <i data-lucide="link" class="w-4 h-4"></i>
-                <span>Подключить выписку Сбербанка</span>
+              <div class="p-4 border-2 border-dashed border-emerald-200 hover:border-emerald-500 rounded-xl bg-slate-50 text-center transition">
+                <input type="file" id="cabSberFileInput" accept=".pdf,.txt,.csv" class="hidden" onchange="onCabSberFileSelected(this)">
+                <button type="button" onclick="document.getElementById('cabSberFileInput').click()" class="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-900 font-bold text-xs px-3.5 py-1.5 rounded-lg transition shadow-sm flex items-center justify-center space-x-1.5 mx-auto">
+                  <i data-lucide="file-up" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  <span>Выбрать PDF-выписку Сбера</span>
+                </button>
+                <div id="cabSberFileName" class="mt-2 text-emerald-700 font-bold text-xs truncate"></div>
+                <p class="text-[10px] text-slate-400 mt-1">Официальная выписка СберБизнес / СберБанк Онлайн (.pdf)</p>
+              </div>
+
+              <button onclick="uploadCabSberFile()" id="btnCabSberUpload" disabled class="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-sm">
+                Распознать и загрузить выписку Сбера
+              </button>
+
+              <button type="button" onclick="handleSberbankImportStub()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2 rounded-xl transition flex items-center justify-center space-x-1.5">
+                <i data-lucide="link" class="w-3.5 h-3.5"></i>
+                <span>Прямое подключение СберБизнес API</span>
               </button>
             </div>
           </div>
