@@ -263,10 +263,6 @@
           <i data-lucide="minus" class="w-3.5 h-3.5"></i>
           <span>Заплачу</span>
         </button>
-        <button onclick="openCabinetModal('statement')" class="bg-ci-50 hover:bg-ci-100 text-ci-700 border border-ci-200 font-bold text-xs px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition">
-          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-          <span>Загрузить CSV</span>
-        </button>
       </div>
 
       <!-- Navigation Pills -->
@@ -319,13 +315,13 @@
         </div>
         <div>
           <div class="text-xs font-black text-amber-950">Новый расчетный счет: выписка не загружена</div>
-          <div class="text-[11px] text-amber-800">Загрузите файл выписки (CSV или 1CClientBankExchange) для формирования календаря и графика остатков</div>
+          <div class="text-[11px] text-amber-800">Загрузите файл выписки в Личном кабинете для формирования календаря и графика остатков</div>
         </div>
       </div>
       <div class="flex items-center space-x-2 text-xs">
         <button onclick="openCabinetModal('statement')" class="bg-ci-600 hover:bg-ci-700 text-white font-bold px-3 py-1.5 rounded-xl transition flex items-center space-x-1.5 shadow-sm">
-          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-          <span>Загрузить CSV</span>
+          <i data-lucide="folder-up" class="w-3.5 h-3.5"></i>
+          <span>Загрузить в ЛК</span>
         </button>
         <button onclick="loadDemoStatement('C001')" class="bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2.5 py-1.5 rounded-xl transition">
           Демо C001

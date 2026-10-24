@@ -67,8 +67,12 @@ async function loadUserProfile() {
       const data = await res.json();
       if (data.authenticated && data.user) {
         state.currentUser = data.user;
-        if (data.company && data.company.id) {
+        const savedCompanyId = localStorage.getItem('ci_radar_company_id');
+        if (savedCompanyId) {
+          state.currentCompanyId = savedCompanyId;
+        } else if (data.company && data.company.id) {
           state.currentCompanyId = data.company.id;
+          localStorage.setItem('ci_radar_company_id', state.currentCompanyId);
         }
         renderUserHeader(data.user);
       } else {
@@ -76,6 +80,7 @@ async function loadUserProfile() {
         state.currentUser = null;
         state.currentCompanyId = null;
         localStorage.removeItem('ci_radar_token');
+  localStorage.removeItem('ci_radar_company_id');
         renderUserHeader(null);
         renderEmptyGuestDashboard();
         return;
@@ -85,6 +90,7 @@ async function loadUserProfile() {
       state.currentUser = null;
       state.currentCompanyId = null;
       localStorage.removeItem('ci_radar_token');
+  localStorage.removeItem('ci_radar_company_id');
       renderUserHeader(null);
       renderEmptyGuestDashboard();
       return;
@@ -249,11 +255,22 @@ async function loadCompaniesList() {
       select.appendChild(addOpt);
     }
 
-    // If currentCompanyId is not in available companies, pick first available
-    if (state.companies.length > 0 && !state.companies.some(c => c.id === state.currentCompanyId)) {
+    // Check if remembered company exists in state.companies
+    const savedCompanyId = localStorage.getItem('ci_radar_company_id');
+    if (savedCompanyId && state.companies.some(c => c.id === savedCompanyId)) {
+      state.currentCompanyId = savedCompanyId;
+      if (select) select.value = savedCompanyId;
+      if (!state.companyInfo || state.companyInfo.id !== savedCompanyId) {
+        await loadAllCompanyData(savedCompanyId);
+      }
+    } else if (state.companies.length > 0 && !state.companies.some(c => c.id === state.currentCompanyId)) {
       state.currentCompanyId = state.companies[0].id;
+      localStorage.setItem('ci_radar_company_id', state.currentCompanyId);
       if (select) select.value = state.currentCompanyId;
       await loadAllCompanyData(state.currentCompanyId);
+    } else if (state.currentCompanyId) {
+      localStorage.setItem('ci_radar_company_id', state.currentCompanyId);
+      if (select) select.value = state.currentCompanyId;
     }
   } catch (err) {
     console.error('Error loading companies:', err);
@@ -275,6 +292,7 @@ async function onCompanyChange(newCompanyId) {
     return;
   }
   state.currentCompanyId = newCompanyId;
+  localStorage.setItem('ci_radar_company_id', newCompanyId);
   await loadAllCompanyData(newCompanyId);
   showToast(`Выбран бизнес: ${state.companyInfo ? state.companyInfo.name : newCompanyId}`);
 }
@@ -372,6 +390,7 @@ async function submitNewBusiness(e) {
 
     // Reload companies list and switch directly to the newly created business
     state.currentCompanyId = createdComp.id;
+    localStorage.setItem('ci_radar_company_id', createdComp.id);
     await loadCompaniesList();
     await loadAllCompanyData(createdComp.id);
   } catch (err) {
@@ -3680,6 +3699,7 @@ function handleLogout() {
   state.currentCompanyId = null;
   state.companyInfo = null;
   localStorage.removeItem('ci_radar_token');
+  localStorage.removeItem('ci_radar_company_id');
 
   closeCabinetModal();
   showToast('Вы успешно вышли из аккаунта');
@@ -4783,12 +4803,15 @@ async function confirmDeleteBusiness() {
       await loadCompaniesList();
       if (data.next_company_id) {
         state.currentCompanyId = data.next_company_id;
+        localStorage.setItem('ci_radar_company_id', data.next_company_id);
         await loadAllCompanyData(data.next_company_id);
       } else if (state.companies && state.companies.length > 0) {
         state.currentCompanyId = state.companies[0].id;
+        localStorage.setItem('ci_radar_company_id', state.companies[0].id);
         await loadAllCompanyData(state.companies[0].id);
       } else {
         state.currentCompanyId = null;
+        localStorage.removeItem('ci_radar_company_id');
         state.companyInfo = null;
         renderEmptyGuestDashboard();
       }
