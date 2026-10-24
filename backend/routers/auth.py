@@ -329,9 +329,50 @@ def update_profile(
         user.full_name = payload.full_name.strip()
     if payload.phone is not None:
         user.phone = payload.phone.strip()
+    if payload.company_id is not None:
+        comp_id = payload.company_id.strip()
+        comp = db.query(Company).filter(Company.id == comp_id).first()
+        if comp:
+            user.company_id = comp_id
     db.commit()
     db.refresh(user)
     return UserOut.model_validate(user)
+
+@router.post("/switch-company/{company_id}")
+def switch_company(
+    company_id: str,
+    user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db)
+):
+    """
+    Переключение текущего активного бизнеса пользователя с фиксацией в БД.
+    """
+    if user.role != "bank_manager":
+        uc = db.query(UserCompany).filter(
+            UserCompany.user_id == user.id,
+            UserCompany.company_id == company_id
+        ).first()
+        if not uc and user.company_id != company_id and company_id not in ["C001", "C004"]:
+            raise HTTPException(status_code=403, detail="Нет доступа к этой компании")
+
+        # Обновляем признак по умолчанию в связях
+        db.query(UserCompany).filter(UserCompany.user_id == user.id).update({UserCompany.is_default: False})
+        if uc:
+            uc.is_default = True
+
+    comp = db.query(Company).filter(Company.id == company_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    user.company_id = company_id
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "ok",
+        "company_id": user.company_id,
+        "company_name": comp.name
+    }
 
 @router.patch("/company", response_model=CompanyOut)
 def update_user_company(

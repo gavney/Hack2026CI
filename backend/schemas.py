@@ -36,6 +36,7 @@ class VerifyCodeRequest(BaseModel):
 class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    company_id: Optional[str] = None
 
 class UserOut(BaseModel):
     id: str

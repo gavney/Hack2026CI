@@ -1,6 +1,6 @@
 // Global Application State
 let state = {
-  currentCompanyId: null,
+  currentCompanyId: localStorage.getItem('ci_radar_company_id') || null,
   companies: [],
   currentHorizon: 30,
   activeTab: 'radar',
@@ -51,12 +51,57 @@ function getAuthHeaders(isJson = true) {
   return headers;
 }
 
+// Render company select dropdown helper
+function renderCompanySelectDropdown(activeId) {
+  const select = document.getElementById('companySelect');
+  if (!select) return;
+  select.innerHTML = '';
+
+  if (!state.currentUser || !state.companies || state.companies.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = "";
+    opt.textContent = "— Войдите в аккаунт для выбора бизнеса —";
+    opt.disabled = true;
+    opt.selected = true;
+    opt.className = "text-slate-500 bg-white font-semibold";
+    select.appendChild(opt);
+
+    const promptOpt = document.createElement('option');
+    promptOpt.value = "__login_prompt__";
+    promptOpt.textContent = "🔐 Войти / зарегистрировать свой бизнес...";
+    promptOpt.className = "text-emerald-700 bg-emerald-50 font-bold";
+    select.appendChild(promptOpt);
+    return;
+  }
+
+  const targetId = activeId || state.currentCompanyId;
+  state.companies.forEach(comp => {
+    const opt = document.createElement('option');
+    opt.value = comp.id;
+    opt.textContent = `${comp.name} (${comp.legal_form || 'Бизнес'} • ИНН ${comp.inn})`;
+    opt.className = "text-slate-900 bg-white font-semibold";
+    if (comp.id === targetId) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  const addOpt = document.createElement('option');
+  addOpt.value = "__add_new_business__";
+  addOpt.textContent = "+ Добавить новый бизнес в аккаунт...";
+  addOpt.className = "text-emerald-700 bg-emerald-50 font-bold";
+  select.appendChild(addOpt);
+
+  if (targetId) {
+    select.value = targetId;
+  }
+}
+
 // 1. Load User Profile & Current Company
 async function loadUserProfile() {
   if (!state.authToken) {
     state.currentUser = null;
     state.currentCompanyId = null;
     renderUserHeader(null);
+    renderCompanySelectDropdown(null);
     renderEmptyGuestDashboard();
     return;
   }
@@ -67,21 +112,48 @@ async function loadUserProfile() {
       const data = await res.json();
       if (data.authenticated && data.user) {
         state.currentUser = data.user;
+        state.companies = data.companies || [];
+
+        // Determine active company:
+        // 1. Saved in localStorage if it exists among user companies
+        // 2. Otherwise backend data.company or user.company_id
+        // 3. Otherwise first company
         const savedCompanyId = localStorage.getItem('ci_radar_company_id');
-        if (savedCompanyId) {
-          state.currentCompanyId = savedCompanyId;
-        } else if (data.company && data.company.id) {
-          state.currentCompanyId = data.company.id;
-          localStorage.setItem('ci_radar_company_id', state.currentCompanyId);
+        let chosenCompanyId = null;
+
+        if (savedCompanyId && state.companies.some(c => c.id === savedCompanyId)) {
+          chosenCompanyId = savedCompanyId;
+        } else if (data.company && data.company.id && state.companies.some(c => c.id === data.company.id)) {
+          chosenCompanyId = data.company.id;
+        } else if (data.user.company_id && state.companies.some(c => c.id === data.user.company_id)) {
+          chosenCompanyId = data.user.company_id;
+        } else if (state.companies.length > 0) {
+          chosenCompanyId = state.companies[0].id;
         }
+
+        state.currentCompanyId = chosenCompanyId;
+        if (chosenCompanyId) {
+          localStorage.setItem('ci_radar_company_id', chosenCompanyId);
+        } else {
+          localStorage.removeItem('ci_radar_company_id');
+        }
+
         renderUserHeader(data.user);
+        renderCompanySelectDropdown(chosenCompanyId);
+
+        if (chosenCompanyId) {
+          await loadAllCompanyData(chosenCompanyId);
+        } else {
+          renderEmptyGuestDashboard();
+        }
       } else {
         state.authToken = null;
         state.currentUser = null;
         state.currentCompanyId = null;
         localStorage.removeItem('ci_radar_token');
-  localStorage.removeItem('ci_radar_company_id');
+        localStorage.removeItem('ci_radar_company_id');
         renderUserHeader(null);
+        renderCompanySelectDropdown(null);
         renderEmptyGuestDashboard();
         return;
       }
@@ -90,8 +162,9 @@ async function loadUserProfile() {
       state.currentUser = null;
       state.currentCompanyId = null;
       localStorage.removeItem('ci_radar_token');
-  localStorage.removeItem('ci_radar_company_id');
+      localStorage.removeItem('ci_radar_company_id');
       renderUserHeader(null);
+      renderCompanySelectDropdown(null);
       renderEmptyGuestDashboard();
       return;
     }
@@ -101,14 +174,9 @@ async function loadUserProfile() {
     state.currentUser = null;
     state.currentCompanyId = null;
     renderUserHeader(null);
+    renderCompanySelectDropdown(null);
     renderEmptyGuestDashboard();
     return;
-  }
-
-  if (state.currentCompanyId) {
-    await loadAllCompanyData(state.currentCompanyId);
-  } else {
-    renderEmptyGuestDashboard();
   }
 }
 
@@ -213,65 +281,29 @@ function renderUserHeader(user) {
 
 // 2. Load Companies for Switcher (Filtered by Current User & Access Rights)
 async function loadCompaniesList() {
+  if (!state.currentUser || !state.authToken) {
+    renderCompanySelectDropdown(null);
+    return;
+  }
+
   try {
     const res = await fetch('/api/companies', { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Ошибка загрузки списка компаний');
     state.companies = await res.json();
 
-    const select = document.getElementById('companySelect');
-    if (!select) return;
-    select.innerHTML = '';
-
-    if (!state.currentUser || state.companies.length === 0) {
-      const opt = document.createElement('option');
-      opt.value = "";
-      opt.textContent = "— Войдите в аккаунт для выбора бизнеса —";
-      opt.disabled = true;
-      opt.selected = true;
-      opt.className = "text-slate-500 bg-white font-semibold";
-      select.appendChild(opt);
-
-      const promptOpt = document.createElement('option');
-      promptOpt.value = "__login_prompt__";
-      promptOpt.textContent = "🔐 Войти / зарегистрировать свой бизнес...";
-      promptOpt.className = "text-emerald-700 bg-emerald-50 font-bold";
-      select.appendChild(promptOpt);
-      renderEmptyGuestDashboard();
-      return;
-    } else {
-      // Authenticated User: show only businesses linked to this account
-      state.companies.forEach(comp => {
-        const opt = document.createElement('option');
-        opt.value = comp.id;
-        opt.textContent = `${comp.name} (${comp.legal_form || 'Бизнес'} • ИНН ${comp.inn})`;
-        opt.className = "text-slate-900 bg-white font-semibold";
-        if (comp.id === state.currentCompanyId) opt.selected = true;
-        select.appendChild(opt);
-      });
-      const addOpt = document.createElement('option');
-      addOpt.value = "__add_new_business__";
-      addOpt.textContent = "+ Добавить новый бизнес в аккаунт...";
-      addOpt.className = "text-emerald-700 bg-emerald-50 font-bold";
-      select.appendChild(addOpt);
-    }
-
-    // Check if remembered company exists in state.companies
     const savedCompanyId = localStorage.getItem('ci_radar_company_id');
     if (savedCompanyId && state.companies.some(c => c.id === savedCompanyId)) {
       state.currentCompanyId = savedCompanyId;
-      if (select) select.value = savedCompanyId;
-      if (!state.companyInfo || state.companyInfo.id !== savedCompanyId) {
-        await loadAllCompanyData(savedCompanyId);
-      }
-    } else if (state.companies.length > 0 && !state.companies.some(c => c.id === state.currentCompanyId)) {
+    } else if (state.currentCompanyId && state.companies.some(c => c.id === state.currentCompanyId)) {
+      // keep current valid company
+      localStorage.setItem('ci_radar_company_id', state.currentCompanyId);
+    } else if (state.companies.length > 0) {
       state.currentCompanyId = state.companies[0].id;
       localStorage.setItem('ci_radar_company_id', state.currentCompanyId);
-      if (select) select.value = state.currentCompanyId;
-      await loadAllCompanyData(state.currentCompanyId);
-    } else if (state.currentCompanyId) {
-      localStorage.setItem('ci_radar_company_id', state.currentCompanyId);
-      if (select) select.value = state.currentCompanyId;
     }
+
+    renderCompanySelectDropdown(state.currentCompanyId);
+    populateCabinetPageDetails();
   } catch (err) {
     console.error('Error loading companies:', err);
   }
@@ -293,7 +325,21 @@ async function onCompanyChange(newCompanyId) {
   }
   state.currentCompanyId = newCompanyId;
   localStorage.setItem('ci_radar_company_id', newCompanyId);
+
+  // Sync select element in navbar
+  const select = document.getElementById('companySelect');
+  if (select && select.value !== newCompanyId) {
+    select.value = newCompanyId;
+  }
+
+  // Persist to backend
+  fetch(`/api/auth/switch-company/${encodeURIComponent(newCompanyId)}`, {
+    method: 'POST',
+    headers: getAuthHeaders()
+  }).catch(err => console.warn('Could not persist company switch to server:', err));
+
   await loadAllCompanyData(newCompanyId);
+  populateCabinetPageDetails();
   showToast(`Выбран бизнес: ${state.companyInfo ? state.companyInfo.name : newCompanyId}`);
 }
 
@@ -3422,6 +3468,7 @@ async function handleVerifyOtpCode(e) {
         state.currentUser = data.user;
         state.currentCompanyId = data.company.id;
         localStorage.setItem('ci_radar_token', data.access_token);
+        localStorage.setItem('ci_radar_company_id', data.company.id);
 
         closeAuthModal();
         showToast(`Добро пожаловать, ${data.user.full_name}!`);
@@ -3490,6 +3537,7 @@ async function handleCompleteRegistration(e) {
       state.currentUser = data.user;
       state.currentCompanyId = data.company.id;
       localStorage.setItem('ci_radar_token', data.access_token);
+      localStorage.setItem('ci_radar_company_id', data.company.id);
 
       closeAuthModal();
       showToast(`Бизнес успешно зарегистрирован!`);
