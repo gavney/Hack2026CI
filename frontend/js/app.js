@@ -2400,8 +2400,6 @@ async function deleteCategoryConfirm(catId, catName) {
       }
       showToast(`Не удалось удалить категорию: ${msg}`);
     }
-      showToast(`Не удалось удалить категорию: ${err.detail || 'Ошибка'}`);
-    }
   } catch (e) {
     console.error('Error deleting category:', e);
     showToast('Ошибка сети при удалении категории');
