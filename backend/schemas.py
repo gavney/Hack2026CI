@@ -166,7 +166,14 @@ class CategoryBase(BaseModel):
     icon: str = "tag"
     hidden: bool = False
 
-class CategoryCreate(CategoryBase):
+class CategoryCreate(BaseModel):
+    id: Optional[str] = None
+    name: str
+    cashflow_role: str = "variable_out"
+    parent_id: Optional[str] = None
+    color: str = "#10b981"
+    icon: str = "tag"
+    hidden: bool = False
     company_id: Optional[str] = None
 
 class CategoryUpdate(BaseModel):

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 import uuid
+import re
 from backend.database import get_db
 from backend.models import Operation, Category, CategoryMemory, Company, Counterparty
 from backend.schemas import (
@@ -202,25 +203,110 @@ def update_operation_category(
     return out
 
 @router.get("/companies/{company_id}/categories", response_model=List[CategoryOut])
-def list_categories(company_id: str, db: Session = Depends(get_db)):
-    # Return standard system categories + custom company categories
-    return db.query(Category).filter(
+def list_categories(
+    company_id: str,
+    include_hidden: bool = False,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Category).filter(
         (Category.company_id == None) | (Category.company_id == company_id)
-    ).all()
+    )
+    if not include_hidden:
+        query = query.filter((Category.hidden == False) | (Category.hidden == None))
+    return query.order_by(Category.name.asc()).all()
+
 
 @router.post("/companies/{company_id}/categories", response_model=CategoryOut)
 def create_category(company_id: str, payload: CategoryCreate, db: Session = Depends(get_db)):
+    cat_id = payload.id
+    if not cat_id or not cat_id.strip():
+        clean_name = re.sub(r'[^a-zA-Z0-9]', '_', payload.name.lower()).strip('_')
+        cat_id = f"cat_{clean_name[:15]}_{uuid.uuid4().hex[:6]}" if clean_name else f"cat_custom_{uuid.uuid4().hex[:8]}"
+
+    existing = db.query(Category).filter(
+        Category.id == cat_id,
+        (Category.company_id == None) | (Category.company_id == company_id)
+    ).first()
+
+    if existing:
+        existing.name = payload.name
+        existing.cashflow_role = payload.cashflow_role
+        if payload.color:
+            existing.color = payload.color
+        if payload.icon:
+            existing.icon = payload.icon
+        if payload.hidden is not None:
+            existing.hidden = payload.hidden
+        if payload.parent_id is not None:
+            existing.parent_id = payload.parent_id
+        db.commit()
+        db.refresh(existing)
+        return existing
+
     cat = Category(
-        id=payload.id,
+        id=cat_id,
         company_id=company_id,
         parent_id=payload.parent_id,
         name=payload.name,
         cashflow_role=payload.cashflow_role,
-        color=payload.color,
-        icon=payload.icon,
+        color=payload.color or "#10b981",
+        icon=payload.icon or "tag",
+        hidden=payload.hidden or False,
         status="confirmed"
     )
     db.add(cat)
     db.commit()
     db.refresh(cat)
     return cat
+
+
+@router.patch("/companies/{company_id}/categories/{category_id}", response_model=CategoryOut)
+@router.put("/companies/{company_id}/categories/{category_id}", response_model=CategoryOut)
+def update_category(
+    company_id: str,
+    category_id: str,
+    payload: CategoryUpdate,
+    db: Session = Depends(get_db)
+):
+    cat = db.query(Category).filter(
+        Category.id == category_id,
+        (Category.company_id == None) | (Category.company_id == company_id)
+    ).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Категория не найдена")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, val in update_data.items():
+        if val is not None:
+            setattr(cat, field, val)
+
+    cat.version = (cat.version or 1) + 1
+    db.commit()
+    db.refresh(cat)
+    return cat
+
+
+@router.delete("/companies/{company_id}/categories/{category_id}")
+def delete_category(
+    company_id: str,
+    category_id: str,
+    db: Session = Depends(get_db)
+):
+    cat = db.query(Category).filter(
+        Category.id == category_id,
+        (Category.company_id == None) | (Category.company_id == company_id)
+    ).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Категория не найдена")
+
+    if cat.company_id == company_id:
+        db.query(Operation).filter(
+            Operation.company_id == company_id,
+            Operation.category_id == category_id
+        ).update({"category_id": "cat_other_out", "category_source": "manual"})
+        db.delete(cat)
+    else:
+        cat.hidden = True
+
+    db.commit()
+    return {"success": True, "message": f"Категория '{cat.name}' удалена"}

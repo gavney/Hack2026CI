@@ -19,6 +19,9 @@ let state = {
   cpFilter: 'all',
   cpSearch: '',
   selectedCounterparty: null,
+  categories: [],
+  catRoleFilter: 'all',
+  catSearchQuery: '',
   fnsApiKey: localStorage.getItem('ci_fns_api_key') || ''
 };
 
@@ -460,6 +463,7 @@ async function loadAllCompanyData(companyId) {
       populateCabinetPageDetails();
     }
 
+    await loadCategories();
     await loadForecastData();
     await loadOperations();
     await loadSlots();
@@ -1979,6 +1983,400 @@ async function saveEditedCategory() {
     }
   } catch (err) {
     console.error(err);
+  }
+}
+
+// =========================================================================
+// 7.1. CATEGORIES MANAGEMENT (CRUD)
+// =========================================================================
+
+const AVAILABLE_CATEGORY_COLORS = [
+  '#10b981', '#2563eb', '#7c3aed', '#ea580c', '#dc2626',
+  '#0891b2', '#d97706', '#64748b', '#ec4899', '#059669'
+];
+
+const AVAILABLE_CATEGORY_ICONS = [
+  'tag', 'shopping-bag', 'users', 'building', 'landmark',
+  'truck', 'megaphone', 'wallet', 'server', 'cpu',
+  'coffee', 'heart', 'file-text', 'repeat'
+];
+
+async function loadCategories() {
+  if (!state.currentCompanyId) return;
+  try {
+    const res = await fetch(`/api/companies/${state.currentCompanyId}/categories`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      state.categories = await res.json();
+      populateCategoryDropdowns();
+      renderCategoriesTable();
+    }
+  } catch (err) {
+    console.error('Error loading categories:', err);
+  }
+}
+
+function populateCategoryDropdowns() {
+  const cats = state.categories || [];
+  if (cats.length === 0) return;
+
+  const targetSelects = ['editCatSelect', 'newSlotCategory', 'editEvCategory'];
+  targetSelects.forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const prevVal = sel.value;
+    sel.innerHTML = '';
+    cats.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+    if (prevVal && cats.some(c => c.id === prevVal)) {
+      sel.value = prevVal;
+    }
+  });
+}
+
+function openCategoryManageSubTab() {
+  switchTab('cabinet');
+  switchCabinetSubTab('categories');
+}
+
+function getCashflowRoleBadge(role) {
+  switch (role) {
+    case 'variable_in':
+      return '<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">🟢 Поступление (выручка)</span>';
+    case 'regular_out':
+      return '<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">🔵 Регулярный расход</span>';
+    case 'variable_out':
+      return '<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">🟠 Переменный расход</span>';
+    case 'tax':
+      return '<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-red-100 text-red-800">🔴 Налоги и взносы (ЕНП)</span>';
+    case 'one_off':
+      return '<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">🟣 Деньги владельцу</span>';
+    case 'refund':
+      return '<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-200 text-slate-800">⚪ Возврат</span>';
+    case 'transfer_own':
+      return '<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">🔄 Свои счета</span>';
+    default:
+      return `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${role || 'Операции'}</span>`;
+  }
+}
+
+function filterCategoriesList(roleFilter) {
+  state.catRoleFilter = roleFilter;
+  const pills = {
+    'all': 'catFilterAll',
+    'inflow': 'catFilterInflow',
+    'regular_out': 'catFilterRegular',
+    'variable_out': 'catFilterVariable',
+    'tax': 'catFilterTax',
+    'other': 'catFilterOther'
+  };
+
+  Object.keys(pills).forEach(k => {
+    const el = document.getElementById(pills[k]);
+    if (el) {
+      if (k === roleFilter) {
+        el.className = 'px-3 py-1.5 rounded-xl bg-slate-900 text-white transition';
+      } else {
+        el.className = 'px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition';
+      }
+    }
+  });
+
+  renderCategoriesTable();
+}
+
+function onCatSearchInput(query) {
+  state.catSearchQuery = (query || '').toLowerCase().trim();
+  renderCategoriesTable();
+}
+
+function renderCategoriesTable() {
+  const tbody = document.getElementById('categoriesTableBody');
+  if (!tbody) return;
+
+  const cats = state.categories || [];
+  let filtered = cats.filter(c => !c.hidden);
+
+  if (state.catRoleFilter === 'inflow') {
+    filtered = filtered.filter(c => c.cashflow_role === 'variable_in');
+  } else if (state.catRoleFilter === 'regular_out') {
+    filtered = filtered.filter(c => c.cashflow_role === 'regular_out');
+  } else if (state.catRoleFilter === 'variable_out') {
+    filtered = filtered.filter(c => c.cashflow_role === 'variable_out');
+  } else if (state.catRoleFilter === 'tax') {
+    filtered = filtered.filter(c => c.cashflow_role === 'tax');
+  } else if (state.catRoleFilter === 'other') {
+    filtered = filtered.filter(c => ['one_off', 'refund', 'transfer_own'].includes(c.cashflow_role));
+  }
+
+  if (state.catSearchQuery) {
+    filtered = filtered.filter(c =>
+      (c.name || '').toLowerCase().includes(state.catSearchQuery) ||
+      (c.id || '').toLowerCase().includes(state.catSearchQuery)
+    );
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" class="py-8 text-center text-slate-400">
+          <i data-lucide="tag" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
+          <div>Категории не найдены</div>
+          <button type="button" onclick="openAddCategoryModal()" class="mt-2 text-xs font-bold text-ci-600 hover:underline">
+            + Создать новую категорию
+          </button>
+        </td>
+      </tr>
+    `;
+    lucide.createIcons();
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(c => {
+    const isCustom = !!c.company_id;
+    const catColor = c.color || '#10b981';
+    const catIcon = c.icon || 'tag';
+    const safeName = (c.name || '').replace(/'/g, "\\'");
+
+    return `
+      <tr class="hover:bg-slate-50/70 transition">
+        <td class="py-2.5 px-3">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white shrink-0 shadow-xs" style="background-color: ${catColor}">
+              <i data-lucide="${catIcon}" class="w-3.5 h-3.5"></i>
+            </div>
+            <div>
+              <div class="font-extrabold text-slate-900">${c.name}</div>
+              <div class="text-[10px] text-slate-400 font-mono">${c.id}</div>
+            </div>
+          </div>
+        </td>
+        <td class="py-2.5 px-3">
+          ${getCashflowRoleBadge(c.cashflow_role)}
+        </td>
+        <td class="py-2.5 px-3">
+          ${isCustom
+            ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">Пользовательская</span>'
+            : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Системная</span>'}
+        </td>
+        <td class="py-2.5 px-3 text-right">
+          <div class="inline-flex items-center space-x-1">
+            <button onclick="openCategoryEditModal('${c.id}')" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition" title="Редактировать">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="deleteCategoryConfirm('${c.id}', '${safeName}')" class="p-1.5 rounded-lg text-red-400 hover:text-red-700 hover:bg-red-50 transition" title="Удалить">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  lucide.createIcons();
+}
+
+function renderColorAndIconPalettes(selectedColor, selectedIcon) {
+  const colorContainer = document.getElementById('categoryColorPalette');
+  if (colorContainer) {
+    colorContainer.innerHTML = AVAILABLE_CATEGORY_COLORS.map(color => {
+      const isSelected = (color.toLowerCase() === (selectedColor || '#10b981').toLowerCase());
+      return `
+        <button type="button" onclick="selectCategoryColor('${color}')"
+          class="w-6 h-6 rounded-full transition transform hover:scale-110 shadow-xs ${isSelected ? 'ring-2 ring-offset-2 ring-slate-800 scale-110' : ''}"
+          style="background-color: ${color};"
+          title="${color}">
+        </button>
+      `;
+    }).join('');
+  }
+
+  const iconContainer = document.getElementById('categoryIconPalette');
+  if (iconContainer) {
+    iconContainer.innerHTML = AVAILABLE_CATEGORY_ICONS.map(iconName => {
+      const isSelected = (iconName === (selectedIcon || 'tag'));
+      return `
+        <button type="button" onclick="selectCategoryIcon('${iconName}')"
+          class="p-2 rounded-xl border flex items-center justify-center transition ${isSelected ? 'border-ci-600 bg-ci-50 text-ci-800 ring-2 ring-ci-400' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'}">
+          <i data-lucide="${iconName}" class="w-4 h-4"></i>
+        </button>
+      `;
+    }).join('');
+  }
+
+  const preview = document.getElementById('categoryModalIconPreview');
+  if (preview) {
+    preview.style.backgroundColor = selectedColor || '#10b981';
+    preview.style.color = '#ffffff';
+    preview.innerHTML = `<i data-lucide="${selectedIcon || 'tag'}" class="w-4 h-4"></i>`;
+  }
+
+  lucide.createIcons();
+}
+
+function selectCategoryColor(color) {
+  const hiddenColor = document.getElementById('categoryFormColor');
+  if (hiddenColor) hiddenColor.value = color;
+  const currentIcon = document.getElementById('categoryFormIcon') ? document.getElementById('categoryFormIcon').value : 'tag';
+  renderColorAndIconPalettes(color, currentIcon);
+}
+
+function selectCategoryIcon(iconName) {
+  const hiddenIcon = document.getElementById('categoryFormIcon');
+  if (hiddenIcon) hiddenIcon.value = iconName;
+  const currentColor = document.getElementById('categoryFormColor') ? document.getElementById('categoryFormColor').value : '#10b981';
+  renderColorAndIconPalettes(currentColor, iconName);
+}
+
+function openAddCategoryModal() {
+  const modal = document.getElementById('categoryModal');
+  if (!modal) return;
+
+  const idInput = document.getElementById('categoryFormId');
+  const nameInput = document.getElementById('categoryFormName');
+  const roleSelect = document.getElementById('categoryFormRole');
+  const titleEl = document.getElementById('categoryModalTitle');
+  const submitBtn = document.getElementById('btnSubmitCategory');
+
+  if (idInput) idInput.value = '';
+  if (nameInput) nameInput.value = '';
+  if (roleSelect) roleSelect.value = 'variable_out';
+  if (titleEl) titleEl.innerText = 'Новая категория';
+  if (submitBtn) submitBtn.innerText = 'Создать категорию';
+
+  const defaultColor = '#10b981';
+  const defaultIcon = 'tag';
+  if (document.getElementById('categoryFormColor')) document.getElementById('categoryFormColor').value = defaultColor;
+  if (document.getElementById('categoryFormIcon')) document.getElementById('categoryFormIcon').value = defaultIcon;
+
+  renderColorAndIconPalettes(defaultColor, defaultIcon);
+  modal.classList.remove('hidden');
+}
+
+function openCategoryEditModal(catId) {
+  const modal = document.getElementById('categoryModal');
+  if (!modal) return;
+
+  const cat = (state.categories || []).find(c => c.id === catId);
+  if (!cat) {
+    showToast('Категория не найдена');
+    return;
+  }
+
+  const idInput = document.getElementById('categoryFormId');
+  const nameInput = document.getElementById('categoryFormName');
+  const roleSelect = document.getElementById('categoryFormRole');
+  const titleEl = document.getElementById('categoryModalTitle');
+  const submitBtn = document.getElementById('btnSubmitCategory');
+
+  if (idInput) idInput.value = cat.id;
+  if (nameInput) nameInput.value = cat.name;
+  if (roleSelect) roleSelect.value = cat.cashflow_role || 'variable_out';
+  if (titleEl) titleEl.innerText = `Редактирование: ${cat.name}`;
+  if (submitBtn) submitBtn.innerText = 'Сохранить изменения';
+
+  const color = cat.color || '#10b981';
+  const icon = cat.icon || 'tag';
+  if (document.getElementById('categoryFormColor')) document.getElementById('categoryFormColor').value = color;
+  if (document.getElementById('categoryFormIcon')) document.getElementById('categoryFormIcon').value = icon;
+
+  renderColorAndIconPalettes(color, icon);
+  modal.classList.remove('hidden');
+}
+
+function closeCategoryModal() {
+  const modal = document.getElementById('categoryModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function submitCategoryForm(event) {
+  if (event) event.preventDefault();
+  const formId = document.getElementById('categoryFormId').value;
+  const name = document.getElementById('categoryFormName').value.trim();
+  const role = document.getElementById('categoryFormRole').value;
+  const color = document.getElementById('categoryFormColor').value || '#10b981';
+  const icon = document.getElementById('categoryFormIcon').value || 'tag';
+
+  if (!name) {
+    showToast('Введите название категории');
+    return;
+  }
+
+  const payload = {
+    name: name,
+    cashflow_role: role,
+    color: color,
+    icon: icon
+  };
+
+  try {
+    let res;
+    if (formId) {
+      res = await fetch(`/api/companies/${state.currentCompanyId}/categories/${encodeURIComponent(formId)}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(`/api/companies/${state.currentCompanyId}/categories`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+    }
+
+    if (res.ok) {
+      const savedCat = await res.json();
+      showToast(formId ? `Категория «${savedCat.name}» обновлена!` : `Категория «${savedCat.name}» успешно создана!`);
+      closeCategoryModal();
+      await loadCategories();
+
+      const editCatSelect = document.getElementById('editCatSelect');
+      if (editCatSelect && savedCat.id) {
+        editCatSelect.value = savedCat.id;
+      }
+
+      if (state.activeTab === 'operations') {
+        renderOperationsTable();
+      }
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      showToast(`Ошибка сохранения категории: ${errData.detail || 'Проверьте данные'}`);
+    }
+  } catch (err) {
+    console.error('Error saving category:', err);
+    showToast('Ошибка сети при сохранении категории');
+  }
+}
+
+async function deleteCategoryConfirm(catId, catName) {
+  if (!confirm(`Вы действительно хотите удалить или скрыть категорию «${catName || catId}»? Все операции будут безопасно сохранены.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/companies/${state.currentCompanyId}/categories/${encodeURIComponent(catId)}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      showToast(`Категория «${catName || catId}» удалена`);
+      await loadCategories();
+      if (state.activeTab === 'operations') {
+        await loadOperations();
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`Не удалось удалить категорию: ${err.detail || 'Ошибка'}`);
+    }
+  } catch (e) {
+    console.error('Error deleting category:', e);
+    showToast('Ошибка сети при удалении категории');
   }
 }
 
@@ -6142,6 +6540,19 @@ window.onImportSourceChange = onImportSourceChange;
 window.handleSberbankImportStub = handleSberbankImportStub;
 window.onCabSberFileSelected = onCabSberFileSelected;
 window.uploadCabSberFile = uploadCabSberFile;
+window.loadCategories = loadCategories;
+window.populateCategoryDropdowns = populateCategoryDropdowns;
+window.openCategoryManageSubTab = openCategoryManageSubTab;
+window.filterCategoriesList = filterCategoriesList;
+window.onCatSearchInput = onCatSearchInput;
+window.renderCategoriesTable = renderCategoriesTable;
+window.selectCategoryColor = selectCategoryColor;
+window.selectCategoryIcon = selectCategoryIcon;
+window.openAddCategoryModal = openAddCategoryModal;
+window.openCategoryEditModal = openCategoryEditModal;
+window.closeCategoryModal = closeCategoryModal;
+window.submitCategoryForm = submitCategoryForm;
+window.deleteCategoryConfirm = deleteCategoryConfirm;
 
 
 

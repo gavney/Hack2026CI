@@ -86,3 +86,39 @@ def test_e2e_export():
     exp_res = client.get("/api/companies/C001/export/tax-declaration")
     assert exp_res.status_code == 200
     assert "text/csv" in exp_res.headers["content-type"]
+
+
+def test_e2e_categories_crud():
+    # 1. List categories
+    res = client.get("/api/companies/C001/categories")
+    assert res.status_code == 200
+    cats = res.json()
+    assert len(cats) >= 10
+
+    # 2. Create custom category
+    create_res = client.post("/api/companies/C001/categories", json={
+        "name": "Серверы и облако",
+        "cashflow_role": "variable_out",
+        "color": "#6366f1",
+        "icon": "server"
+    })
+    assert create_res.status_code == 200
+    new_cat = create_res.json()
+    assert new_cat["name"] == "Серверы и облако"
+    assert new_cat["id"].startswith("cat_")
+    cat_id = new_cat["id"]
+
+    # 3. Update (edit) category
+    patch_res = client.patch(f"/api/companies/C001/categories/{cat_id}", json={
+        "name": "Серверная инфраструктура",
+        "color": "#4f46e5"
+    })
+    assert patch_res.status_code == 200
+    updated_cat = patch_res.json()
+    assert updated_cat["name"] == "Серверная инфраструктура"
+    assert updated_cat["color"] == "#4f46e5"
+
+    # 4. Delete category
+    del_res = client.delete(f"/api/companies/C001/categories/{cat_id}")
+    assert del_res.status_code == 200
+    assert del_res.json()["success"] is True
