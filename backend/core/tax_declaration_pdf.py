@@ -59,8 +59,8 @@ def _format_money_cells(val: Any, length: int) -> str:
         return "-" * length
 
 
-def _draw_corner_squares(page: fitz.Page, w: float, h: float, margin: float = 20.0, sq_size: float = 28.35):
-    """Отрисовка 4 черных оптических квадратов (реперов) по углам страницы (10x10 мм)."""
+def _draw_corner_squares(page: fitz.Page, w: float, h: float, margin: float = 14.17, sq_size: float = 14.17):
+    """Отрисовка 4 черных оптических квадратов (реперов) по углам страницы (5x5 мм = 14.17 pt)."""
     # Верхний левый
     page.draw_rect(fitz.Rect(margin, margin, margin + sq_size, margin + sq_size), color=(0, 0, 0), fill=(0, 0, 0))
     # Верхний правый
@@ -71,10 +71,10 @@ def _draw_corner_squares(page: fitz.Page, w: float, h: float, margin: float = 20
     page.draw_rect(fitz.Rect(w - margin - sq_size, h - margin - sq_size, w - margin, h - margin), color=(0, 0, 0), fill=(0, 0, 0))
 
 
-def _draw_barcode(page: fitz.Page, code_str: str, x: float = 58.0, y: float = 20.0, height: float = 26.0, narrow: float = 0.85, wide: float = 2.35):
+def _draw_barcode(page: fitz.Page, code_str: str, x: float = 38.0, y: float = 14.0, height: float = 22.0, narrow: float = 0.52, wide: float = 1.30):
     """
-    Отрисовка эталонного машиночитаемого штрих-кода Code 39 по стандарту ФНС.
-    Каждый символ имеет 9 чередующихся полос/промежутков с соотношением ширины 1:2.75.
+    Отрисовка эталонного машиночитаемого штрих-кода Code 39 по стандарту ФНС (ширина ~75 pt).
+    Каждый символ имеет 9 чередующихся полос/промежутков с соотношением ширины 1:2.5.
     """
     clean = code_str.replace(" ", "")
     full_text = f"*{clean}*"
@@ -93,7 +93,9 @@ def _draw_barcode(page: fitz.Page, code_str: str, x: float = 58.0, y: float = 20
     # Текст под штрих-кодом в официальном формате: "0301 6015"
     text_display = f"{clean[:4]} {clean[4:]}" if len(clean) == 8 else code_str
     if FONT_REGULAR:
-        page.insert_text(fitz.Point(x + 28.0, y + height + 10.0), text_display, fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8.5)
+        total_w = cur_x - x
+        text_x = x + (total_w - 38.0) / 2.0
+        page.insert_text(fitz.Point(text_x, y + height + 9.0), text_display, fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8.0)
 
 
 def _draw_cells(page: fitz.Page, text: str, x: float, y: float, count: int, cw: float = 12.0, ch: float = 14.5, pad: float = 1.5):
@@ -142,20 +144,20 @@ def generate_tax_declaration_pdf(data: Dict[str, Any]) -> bytes:
     # =========================================================================
     p1 = doc.new_page(width=w, height=h)
     _draw_corner_squares(p1, w, h)
-    _draw_barcode(p1, "0301 6015", x=58, y=20)
+    _draw_barcode(p1, "0301 6015", x=38, y=14)
 
     # Верхний колонтитул
-    p1.insert_text(fitz.Point(170, 31), "ИНН", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p1, inn_cells, 195, 20, 12)
+    p1.insert_text(fitz.Point(170, 25), "ИНН", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p1, inn_cells, 195, 14, 12)
 
-    p1.insert_text(fitz.Point(170, 48), "КПП", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p1, kpp_cells, 195, 37, 9)
+    p1.insert_text(fitz.Point(170, 42), "КПП", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p1, kpp_cells, 195, 31, 9)
 
-    p1.insert_text(fitz.Point(375, 48), "Стр.", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p1, "001", 400, 37, 3)
+    p1.insert_text(fitz.Point(375, 42), "Стр.", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p1, "001", 400, 31, 3)
 
     # Форма по КНД 1152017
-    p1.insert_text(fitz.Point(440, 68), "Форма по КНД 1152017", fontname="f_bld", fontfile=FONT_BOLD, fontsize=8.5)
+    p1.insert_text(fitz.Point(440, 56), "Форма по КНД 1152017", fontname="f_bld", fontfile=FONT_BOLD, fontsize=8.0)
 
     # Заголовок декларации
     title_text = "Налоговая декларация по налогу, уплачиваемому\nв связи с применением упрощенной системы налогообложения"
@@ -259,15 +261,15 @@ def generate_tax_declaration_pdf(data: Dict[str, Any]) -> bytes:
     p2 = doc.new_page(width=w, height=h)
     _draw_corner_squares(p2, w, h)
     barcode_p2 = "0301 6022" if is_6pct else "0301 6039"
-    _draw_barcode(p2, barcode_p2, x=58, y=20)
+    _draw_barcode(p2, barcode_p2, x=38, y=14)
 
     # Верхний колонтитул
-    p2.insert_text(fitz.Point(170, 31), "ИНН", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p2, inn_cells, 195, 20, 12)
-    p2.insert_text(fitz.Point(170, 48), "КПП", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p2, kpp_cells, 195, 37, 9)
-    p2.insert_text(fitz.Point(375, 48), "Стр.", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p2, "002", 400, 37, 3)
+    p2.insert_text(fitz.Point(170, 25), "ИНН", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p2, inn_cells, 195, 14, 12)
+    p2.insert_text(fitz.Point(170, 42), "КПП", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p2, kpp_cells, 195, 31, 9)
+    p2.insert_text(fitz.Point(375, 42), "Стр.", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p2, "002", 400, 31, 3)
 
     sec1_title = "Раздел 1.1. Сумма налога (авансового платежа по налогу), подлежащая уплате (уменьшению) (объект – доходы)" if is_6pct else "Раздел 1.2. Сумма налога (авансового платежа), подлежащая уплате (уменьшению) (объект – доходы минус расходы)"
     p2.insert_text(fitz.Point(60, 78), sec1_title, fontname="f_bld", fontfile=FONT_BOLD, fontsize=8.0)
@@ -307,15 +309,15 @@ def generate_tax_declaration_pdf(data: Dict[str, Any]) -> bytes:
     p3 = doc.new_page(width=w, height=h)
     _draw_corner_squares(p3, w, h)
     barcode_p3 = "0301 6046" if is_6pct else "0301 6084"
-    _draw_barcode(p3, barcode_p3, x=58, y=20)
+    _draw_barcode(p3, barcode_p3, x=38, y=14)
 
     # Верхний колонтитул
-    p3.insert_text(fitz.Point(170, 31), "ИНН", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p3, inn_cells, 195, 20, 12)
-    p3.insert_text(fitz.Point(170, 48), "КПП", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p3, kpp_cells, 195, 37, 9)
-    p3.insert_text(fitz.Point(375, 48), "Стр.", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p3, "003", 400, 37, 3)
+    p3.insert_text(fitz.Point(170, 25), "ИНН", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p3, inn_cells, 195, 14, 12)
+    p3.insert_text(fitz.Point(170, 42), "КПП", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p3, kpp_cells, 195, 31, 9)
+    p3.insert_text(fitz.Point(375, 42), "Стр.", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p3, "003", 400, 31, 3)
 
     if is_6pct:
         # Раздел 2.1.1 (Лист 1)
@@ -441,15 +443,15 @@ def generate_tax_declaration_pdf(data: Dict[str, Any]) -> bytes:
     p4 = doc.new_page(width=w, height=h)
     _draw_corner_squares(p4, w, h)
     barcode_p4 = "0301 6053" if is_6pct else "0301 6091"
-    _draw_barcode(p4, barcode_p4, x=58, y=20)
+    _draw_barcode(p4, barcode_p4, x=38, y=14)
 
     # Верхний колонтитул
-    p4.insert_text(fitz.Point(170, 31), "ИНН", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p4, inn_cells, 195, 20, 12)
-    p4.insert_text(fitz.Point(170, 48), "КПП", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p4, kpp_cells, 195, 37, 9)
-    p4.insert_text(fitz.Point(375, 48), "Стр.", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
-    _draw_cells(p4, "004", 400, 37, 3)
+    p4.insert_text(fitz.Point(170, 25), "ИНН", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p4, inn_cells, 195, 14, 12)
+    p4.insert_text(fitz.Point(170, 42), "КПП", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p4, kpp_cells, 195, 31, 9)
+    p4.insert_text(fitz.Point(375, 42), "Стр.", fontname="f_reg", fontfile=FONT_REGULAR, fontsize=8)
+    _draw_cells(p4, "004", 400, 31, 3)
 
     if is_6pct:
         # Лист 4 для УСН 6%: Раздел 2.1.1 (продолжение: страховые взносы стр. 140-162)

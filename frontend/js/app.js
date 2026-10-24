@@ -4269,10 +4269,10 @@ const CODE39_PATTERNS = {
 function renderBarcodeHtml(codeStr) {
   const clean = String(codeStr || '').replace(/\s+/g, '');
   const fullText = `*${clean}*`;
-  const narrow = 1.05;
-  const wide = 2.8;
-  const height = 26;
-  let curX = 4;
+  const narrow = 0.75;
+  const wide = 1.95;
+  const height = 22;
+  let curX = 2;
   let rects = '';
 
   for (let idx = 0; idx < fullText.length; idx++) {
@@ -4290,15 +4290,15 @@ function renderBarcodeHtml(codeStr) {
       curX += narrow;
     }
   }
-  curX += 4;
+  curX += 2;
   const totalW = Math.ceil(curX);
   const textDisplay = clean.length === 8 ? `${clean.substring(0, 4)} ${clean.substring(4)}` : codeStr;
 
   return `
     <div class="inline-flex flex-col items-start select-none mb-1">
-      <svg width="${totalW}" height="${height + 14}" viewBox="0 0 ${totalW} ${height + 14}" class="overflow-visible">
+      <svg width="${totalW}" height="${height + 12}" viewBox="0 0 ${totalW} ${height + 12}" class="overflow-visible">
         ${rects}
-        <text x="${(totalW / 2).toFixed(1)}" y="${height + 11}" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="10" font-weight="bold" fill="#000">${escapeHtml(textDisplay)}</text>
+        <text x="${(totalW / 2).toFixed(1)}" y="${height + 10}" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="9" font-weight="bold" fill="#000">${escapeHtml(textDisplay)}</text>
       </svg>
     </div>
   `;
@@ -4321,10 +4321,10 @@ function renderTaxDeclarationPreview() {
   }
 
   const cornerSq = `
-    <div class="fns-corner-sq" style="top: 8mm; left: 8mm;"></div>
-    <div class="fns-corner-sq" style="top: 8mm; right: 8mm;"></div>
-    <div class="fns-corner-sq" style="bottom: 8mm; left: 8mm;"></div>
-    <div class="fns-corner-sq" style="bottom: 8mm; right: 8mm;"></div>
+    <div class="fns-corner-sq" style="top: 5mm; left: 5mm;"></div>
+    <div class="fns-corner-sq" style="top: 5mm; right: 5mm;"></div>
+    <div class="fns-corner-sq" style="bottom: 5mm; left: 5mm;"></div>
+    <div class="fns-corner-sq" style="bottom: 5mm; right: 5mm;"></div>
   `;
 
   // PAGE 1: TITLE (0301 6015, Стр. 001)
