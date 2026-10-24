@@ -208,6 +208,10 @@ def list_categories(
     include_hidden: bool = False,
     db: Session = Depends(get_db)
 ):
+    if company_id in ("null", "undefined", ""):
+        first_comp = db.query(Company).first()
+        company_id = first_comp.id if first_comp else "C001"
+
     query = db.query(Category).filter(
         (Category.company_id == None) | (Category.company_id == company_id)
     )
@@ -218,6 +222,10 @@ def list_categories(
 
 @router.post("/companies/{company_id}/categories", response_model=CategoryOut)
 def create_category(company_id: str, payload: CategoryCreate, db: Session = Depends(get_db)):
+    if company_id in ("null", "undefined", ""):
+        first_comp = db.query(Company).first()
+        company_id = first_comp.id if first_comp else "C001"
+
     cat_id = payload.id
     if not cat_id or not cat_id.strip():
         clean_name = re.sub(r'[^a-zA-Z0-9]', '_', payload.name.lower()).strip('_')
@@ -268,6 +276,10 @@ def update_category(
     payload: CategoryUpdate,
     db: Session = Depends(get_db)
 ):
+    if company_id in ("null", "undefined", ""):
+        first_comp = db.query(Company).first()
+        company_id = first_comp.id if first_comp else "C001"
+
     cat = db.query(Category).filter(
         Category.id == category_id,
         (Category.company_id == None) | (Category.company_id == company_id)
@@ -292,6 +304,10 @@ def delete_category(
     category_id: str,
     db: Session = Depends(get_db)
 ):
+    if company_id in ("null", "undefined", ""):
+        first_comp = db.query(Company).first()
+        company_id = first_comp.id if first_comp else "C001"
+
     cat = db.query(Category).filter(
         Category.id == category_id,
         (Category.company_id == None) | (Category.company_id == company_id)

@@ -2314,17 +2314,24 @@ async function submitCategoryForm(event) {
     color: color,
     icon: icon
   };
+  if (formId) {
+    payload.id = formId;
+  }
+
+  const targetCompanyId = (state.currentCompanyId && state.currentCompanyId !== 'null' && state.currentCompanyId !== 'undefined')
+    ? state.currentCompanyId
+    : (localStorage.getItem('ci_radar_company_id') || 'C001');
 
   try {
     let res;
     if (formId) {
-      res = await fetch(`/api/companies/${state.currentCompanyId}/categories/${encodeURIComponent(formId)}`, {
+      res = await fetch(`/api/companies/${targetCompanyId}/categories/${encodeURIComponent(formId)}`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
     } else {
-      res = await fetch(`/api/companies/${state.currentCompanyId}/categories`, {
+      res = await fetch(`/api/companies/${targetCompanyId}/categories`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
@@ -2347,7 +2354,15 @@ async function submitCategoryForm(event) {
       }
     } else {
       const errData = await res.json().catch(() => ({}));
-      showToast(`Ошибка сохранения категории: ${errData.detail || 'Проверьте данные'}`);
+      let msg = 'Проверьте данные';
+      if (typeof errData.detail === 'string') {
+        msg = errData.detail;
+      } else if (Array.isArray(errData.detail)) {
+        msg = errData.detail.map(d => (d.loc ? d.loc.join('.') + ': ' : '') + (d.msg || JSON.stringify(d))).join('; ');
+      } else if (errData.detail && typeof errData.detail === 'object') {
+        msg = errData.detail.msg || JSON.stringify(errData.detail);
+      }
+      showToast(`Ошибка сохранения категории: ${msg}`);
     }
   } catch (err) {
     console.error('Error saving category:', err);
@@ -2360,8 +2375,12 @@ async function deleteCategoryConfirm(catId, catName) {
     return;
   }
 
+  const targetCompanyId = (state.currentCompanyId && state.currentCompanyId !== 'null' && state.currentCompanyId !== 'undefined')
+    ? state.currentCompanyId
+    : (localStorage.getItem('ci_radar_company_id') || 'C001');
+
   try {
-    const res = await fetch(`/api/companies/${state.currentCompanyId}/categories/${encodeURIComponent(catId)}`, {
+    const res = await fetch(`/api/companies/${targetCompanyId}/categories/${encodeURIComponent(catId)}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -2373,6 +2392,14 @@ async function deleteCategoryConfirm(catId, catName) {
       }
     } else {
       const err = await res.json().catch(() => ({}));
+      let msg = 'Ошибка';
+      if (typeof err.detail === 'string') {
+        msg = err.detail;
+      } else if (Array.isArray(err.detail)) {
+        msg = err.detail.map(d => d.msg || JSON.stringify(d)).join('; ');
+      }
+      showToast(`Не удалось удалить категорию: ${msg}`);
+    }
       showToast(`Не удалось удалить категорию: ${err.detail || 'Ошибка'}`);
     }
   } catch (e) {
