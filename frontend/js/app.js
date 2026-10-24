@@ -3758,15 +3758,919 @@ function handleLogout() {
   switchTab('radar');
 }
 
+// ==================== 14.2 НАЛОГОВАЯ ДЕКЛАРАЦИЯ ПО УСН (КНД 1152017) ====================
+state.taxDeclaration = null;
+state.taxDeclarationYear = '2025';
+state.activeDeclTab = 'title';
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function openTaxDeclarationModal(year = null) {
+  if (!state.currentCompanyId) {
+    showToast('Сначала выберите или создайте бизнес');
+    return;
+  }
+  const modal = document.getElementById('taxDeclarationEditorModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  if (year) {
+    state.taxDeclarationYear = String(year);
+  }
+  const yearSelect = document.getElementById('declYearSelect');
+  if (yearSelect) yearSelect.value = state.taxDeclarationYear;
+
+  switchTaxDeclTab('title');
+  loadTaxDeclarationData(state.taxDeclarationYear);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 function openTaxDeclarationStubModal() {
-  const modal = document.getElementById('taxDeclarationStubModal');
-  if (modal) modal.classList.remove('hidden');
-  lucide.createIcons();
+  openTaxDeclarationModal();
+}
+
+function closeTaxDeclarationModal() {
+  const modal = document.getElementById('taxDeclarationEditorModal');
+  if (modal) modal.classList.add('hidden');
 }
 
 function closeTaxDeclarationStubModal() {
-  const modal = document.getElementById('taxDeclarationStubModal');
-  if (modal) modal.classList.add('hidden');
+  closeTaxDeclarationModal();
+}
+
+async function changeTaxDeclYear(year) {
+  state.taxDeclarationYear = String(year);
+  await loadTaxDeclarationData(state.taxDeclarationYear);
+}
+
+async function loadTaxDeclarationData(year) {
+  try {
+    const res = await fetch(`/api/companies/${state.currentCompanyId}/tax-declaration/data?year=${year}`, {
+      headers: getAuthHeaders(true)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      state.taxDeclaration = data;
+      populateTaxDeclarationForm(data);
+      validateTaxDeclarationData();
+      renderTaxDeclarationPreview();
+    } else {
+      showToast('Не удалось загрузить данные декларации');
+    }
+  } catch (err) {
+    console.error('Error fetching tax declaration:', err);
+    showToast('Ошибка загрузки налоговой декларации');
+  }
+}
+
+function populateTaxDeclarationForm(data) {
+  if (!data) return;
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val !== undefined && val !== null ? val : '';
+  };
+
+  setVal('declInn', data.inn || '');
+  setVal('declKpp', data.kpp || '');
+  setVal('declCorrectionNum', data.correction_num || '0');
+  setVal('declIfnsCode', data.ifns_code || '');
+  setVal('declLocationCode', data.location_code || '214');
+  setVal('declOktmo', data.oktmo || '60701000');
+  setVal('declCompanyName', data.company_name || '');
+  setVal('declPhone', data.phone || '');
+  setVal('declTaxObject', data.tax_object || '1');
+  setVal('declPayerCode', data.payer_code || '1');
+
+  // Incomes
+  setVal('declIncQ1', data.income_q1 || 0);
+  setVal('declIncQ2', data.income_q2 || 0);
+  setVal('declIncQ3', data.income_q3 || 0);
+  setVal('declIncYear', data.income_year || 0);
+
+  // Expenses
+  setVal('declExpQ1', data.expense_q1 || 0);
+  setVal('declExpQ2', data.expense_q2 || 0);
+  setVal('declExpQ3', data.expense_q3 || 0);
+  setVal('declExpYear', data.expense_year || 0);
+
+  // Rates
+  const rate = data.rate || (data.tax_object === '2' ? 15 : 6);
+  ['declRateQ1', 'declRateQ2', 'declRateQ3', 'declRateYear'].forEach(id => setVal(id, rate));
+
+  // Taxes
+  setVal('declTaxQ1', data.tax_q1 || 0);
+  setVal('declTaxQ2', data.tax_q2 || 0);
+  setVal('declTaxQ3', data.tax_q3 || 0);
+  setVal('declTaxYear', data.tax_year || 0);
+
+  // Deductions
+  setVal('declDeductQ1', data.deduct_q1 || 0);
+  setVal('declDeductQ2', data.deduct_q2 || 0);
+  setVal('declDeductQ3', data.deduct_q3 || 0);
+  setVal('declDeductYear', data.deduct_year || 0);
+
+  // Section 1 Due / Reductions
+  setVal('declDueQ1', data.due_q1 || 0);
+  setVal('declDueQ2', data.due_q2 || 0);
+  setVal('declDecQ2', data.dec_q2 || 0);
+  setVal('declDueQ3', data.due_q3 || 0);
+  setVal('declDecQ3', data.dec_q3 || 0);
+  setVal('declDueYear', data.due_year || 0);
+  setVal('declDecYear', data.dec_year || 0);
+  setVal('declMinTax', data.min_tax || 0);
+
+  // Toggle 15% conditional views
+  const is15 = String(data.tax_object) === '2';
+  const expSec = document.getElementById('declExpensesSection');
+  if (expSec) expSec.classList.toggle('hidden', !is15);
+  const minTaxSec = document.getElementById('declMinTaxBlock');
+  if (minTaxSec) minTaxSec.classList.toggle('hidden', !is15);
+
+  const sec1T = document.getElementById('declSec1Title');
+  if (sec1T) sec1T.textContent = is15
+    ? 'Раздел 1.2. Сумма налога / авансовых платежей к уплате (УСН Доходы минус расходы)'
+    : 'Раздел 1.1. Сумма налога / авансовых платежей к уплате (УСН Доходы)';
+  const sec2T = document.getElementById('declSec2Title');
+  if (sec2T) sec2T.textContent = is15
+    ? 'Раздел 2.2. Расчет налога, уплачиваемого в связи с применением УСН (Доходы минус расходы)'
+    : 'Раздел 2.1.1. Расчет налога, уплачиваемого в связи с применением УСН (Доходы)';
+}
+
+function getTaxDeclarationFormData() {
+  const getNum = (id) => {
+    const el = document.getElementById(id);
+    return el ? (parseFloat(el.value) || 0) : 0;
+  };
+  const getStr = (id) => {
+    const el = document.getElementById(id);
+    return el ? String(el.value || '').trim() : '';
+  };
+
+  return {
+    company_id: state.currentCompanyId,
+    year: state.taxDeclarationYear,
+    inn: getStr('declInn'),
+    kpp: getStr('declKpp'),
+    company_name: getStr('declCompanyName'),
+    phone: getStr('declPhone'),
+    oktmo: getStr('declOktmo'),
+    ifns_code: getStr('declIfnsCode'),
+    location_code: getStr('declLocationCode') || '214',
+    correction_num: getStr('declCorrectionNum') || '0',
+    tax_object: getStr('declTaxObject') || '1',
+    payer_code: getStr('declPayerCode') || '1',
+    rate: getNum('declRateYear') || 6,
+    income_q1: getNum('declIncQ1'),
+    income_q2: getNum('declIncQ2'),
+    income_q3: getNum('declIncQ3'),
+    income_year: getNum('declIncYear'),
+    expense_q1: getNum('declExpQ1'),
+    expense_q2: getNum('declExpQ2'),
+    expense_q3: getNum('declExpQ3'),
+    expense_year: getNum('declExpYear'),
+    tax_q1: getNum('declTaxQ1'),
+    tax_q2: getNum('declTaxQ2'),
+    tax_q3: getNum('declTaxQ3'),
+    tax_year: getNum('declTaxYear'),
+    due_q1: getNum('declDueQ1'),
+    due_q2: getNum('declDueQ2'),
+    dec_q2: getNum('declDecQ2'),
+    due_q3: getNum('declDueQ3'),
+    dec_q3: getNum('declDecQ3'),
+    due_year: getNum('declDueYear'),
+    dec_year: getNum('declDecYear'),
+    min_tax: getNum('declMinTax'),
+    deduct_q1: getNum('declDeductQ1'),
+    deduct_q2: getNum('declDeductQ2'),
+    deduct_q3: getNum('declDeductQ3'),
+    deduct_year: getNum('declDeductYear')
+  };
+}
+
+function onTaxDeclInputChange(field) {
+  state.taxDeclaration = getTaxDeclarationFormData();
+  validateTaxDeclarationData();
+  renderTaxDeclarationPreview();
+}
+
+function onTaxDeclObjectChange(val) {
+  if (!state.taxDeclaration) state.taxDeclaration = {};
+  state.taxDeclaration.tax_object = String(val);
+  const is15 = String(val) === '2';
+  const defaultRate = is15 ? 15 : 6;
+  state.taxDeclaration.rate = defaultRate;
+  ['declRateQ1', 'declRateQ2', 'declRateQ3', 'declRateYear'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = defaultRate;
+  });
+
+  const expSec = document.getElementById('declExpensesSection');
+  if (expSec) expSec.classList.toggle('hidden', !is15);
+  const minTaxSec = document.getElementById('declMinTaxBlock');
+  if (minTaxSec) minTaxSec.classList.toggle('hidden', !is15);
+
+  const sec1T = document.getElementById('declSec1Title');
+  if (sec1T) sec1T.textContent = is15
+    ? 'Раздел 1.2. Сумма налога / авансовых платежей к уплате (УСН Доходы минус расходы)'
+    : 'Раздел 1.1. Сумма налога / авансовых платежей к уплате (УСН Доходы)';
+  const sec2T = document.getElementById('declSec2Title');
+  if (sec2T) sec2T.textContent = is15
+    ? 'Раздел 2.2. Расчет налога, уплачиваемого в связи с применением УСН (Доходы минус расходы)'
+    : 'Раздел 2.1.1. Расчет налога, уплачиваемого в связи с применением УСН (Доходы)';
+
+  recalculateTaxDeclaration();
+}
+
+function recalculateTaxDeclaration() {
+  const d = getTaxDeclarationFormData();
+  const is15 = d.tax_object === '2';
+  const rQ1 = (parseFloat(document.getElementById('declRateQ1')?.value) || (is15 ? 15 : 6)) / 100;
+  const rQ2 = (parseFloat(document.getElementById('declRateQ2')?.value) || (is15 ? 15 : 6)) / 100;
+  const rQ3 = (parseFloat(document.getElementById('declRateQ3')?.value) || (is15 ? 15 : 6)) / 100;
+  const rYear = (parseFloat(document.getElementById('declRateYear')?.value) || (is15 ? 15 : 6)) / 100;
+
+  let baseQ1 = d.income_q1;
+  let baseQ2 = d.income_q2;
+  let baseQ3 = d.income_q3;
+  let baseYear = d.income_year;
+
+  if (is15) {
+    baseQ1 = Math.max(0, d.income_q1 - d.expense_q1);
+    baseQ2 = Math.max(0, d.income_q2 - d.expense_q2);
+    baseQ3 = Math.max(0, d.income_q3 - d.expense_q3);
+    baseYear = Math.max(0, d.income_year - d.expense_year);
+  }
+
+  // Calculated taxes
+  let taxQ1 = Math.round(baseQ1 * rQ1);
+  let taxQ2 = Math.round(baseQ2 * rQ2);
+  let taxQ3 = Math.round(baseQ3 * rQ3);
+  let taxYear = Math.round(baseYear * rYear);
+
+  // Apply deductions for 6%
+  if (!is15) {
+    const isEmployer = d.payer_code === '1';
+    const maxDeduct = (tax) => isEmployer ? Math.floor(tax * 0.5) : tax;
+    taxQ1 = Math.max(0, taxQ1 - Math.min(d.deduct_q1, maxDeduct(taxQ1)));
+    taxQ2 = Math.max(0, taxQ2 - Math.min(d.deduct_q2, maxDeduct(taxQ2)));
+    taxQ3 = Math.max(0, taxQ3 - Math.min(d.deduct_q3, maxDeduct(taxQ3)));
+    taxYear = Math.max(0, taxYear - Math.min(d.deduct_year, maxDeduct(taxYear)));
+  }
+
+  // Min tax for 15%
+  const minTax = is15 ? Math.round(d.income_year * 0.01) : 0;
+
+  // Payments / Reductions
+  const dueQ1 = taxQ1;
+
+  const diffQ2 = taxQ2 - dueQ1;
+  const dueQ2 = Math.max(0, diffQ2);
+  const decQ2 = diffQ2 < 0 ? Math.abs(diffQ2) : 0;
+
+  const prevAccruedQ3 = dueQ1 + (dueQ2 - decQ2);
+  const diffQ3 = taxQ3 - prevAccruedQ3;
+  const dueQ3 = Math.max(0, diffQ3);
+  const decQ3 = diffQ3 < 0 ? Math.abs(diffQ3) : 0;
+
+  const prevAccruedYear = prevAccruedQ3 + (dueQ3 - decQ3);
+  const finalAnnualTax = is15 ? Math.max(taxYear, minTax) : taxYear;
+  const diffYear = finalAnnualTax - prevAccruedYear;
+  const dueYear = Math.max(0, diffYear);
+  const decYear = diffYear < 0 ? Math.abs(diffYear) : 0;
+
+  // Update inputs
+  const setEl = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  };
+  setEl('declTaxQ1', taxQ1);
+  setEl('declTaxQ2', taxQ2);
+  setEl('declTaxQ3', taxQ3);
+  setEl('declTaxYear', taxYear);
+  setEl('declMinTax', minTax);
+
+  setEl('declDueQ1', dueQ1);
+  setEl('declDueQ2', dueQ2);
+  setEl('declDecQ2', decQ2);
+  setEl('declDueQ3', dueQ3);
+  setEl('declDecQ3', decQ3);
+  setEl('declDueYear', dueYear);
+  setEl('declDecYear', decYear);
+
+  state.taxDeclaration = getTaxDeclarationFormData();
+  validateTaxDeclarationData();
+  renderTaxDeclarationPreview();
+  showToast('Налоги и авансовые платежи автоматически пересчитаны');
+}
+
+async function recalculateFromDatabase() {
+  showToast('Синхронизация с операциями по выписке...');
+  await loadTaxDeclarationData(state.taxDeclarationYear);
+}
+
+function switchTaxDeclTab(tabKey) {
+  state.activeDeclTab = tabKey;
+  const tabs = {
+    title: { btn: 'btnDeclTabTitle', panel: 'declTabTitlePanel' },
+    sec1: { btn: 'btnDeclTabSec1', panel: 'declTabSec1Panel' },
+    sec2: { btn: 'btnDeclTabSec2', panel: 'declTabSec2Panel' },
+    preview: { btn: 'btnDeclTabPreview', panel: 'declTabPreviewPanel' }
+  };
+
+  Object.entries(tabs).forEach(([k, t]) => {
+    const btn = document.getElementById(t.btn);
+    const pnl = document.getElementById(t.panel);
+    if (!btn || !pnl) return;
+    if (k === tabKey) {
+      btn.className = 'px-3 py-1.5 rounded-xl transition bg-white text-slate-900 shadow-2xs font-black flex items-center space-x-1';
+      pnl.classList.remove('hidden');
+    } else {
+      btn.className = 'px-3 py-1.5 rounded-xl transition text-slate-500 hover:text-slate-800 font-bold flex items-center space-x-1';
+      pnl.classList.add('hidden');
+    }
+  });
+
+  if (tabKey === 'preview') {
+    renderTaxDeclarationPreview();
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function validateTaxDeclarationData() {
+  const d = getTaxDeclarationFormData();
+  const errors = [];
+  const setFieldErr = (id, hasErr) => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (hasErr) {
+        el.classList.add('border-red-400', 'bg-red-50/40');
+      } else {
+        el.classList.remove('border-red-400', 'bg-red-50/40');
+      }
+    }
+  };
+
+  // INN validation
+  const cleanInn = d.inn.replace(/\D/g, '');
+  const innOk = (cleanInn.length === 10 || cleanInn.length === 12);
+  setFieldErr('declInn', !innOk);
+  if (!innOk) {
+    errors.push('ИНН должен содержать 10 цифр для юридического лица или 12 цифр для ИП.');
+  }
+
+  // KPP validation (if entered or if legal entity)
+  const isIp = cleanInn.length === 12 || d.company_name.toUpperCase().startsWith('ИП ');
+  if (!isIp && d.kpp) {
+    const cleanKpp = d.kpp.replace(/\D/g, '');
+    const kppOk = cleanKpp.length === 9;
+    setFieldErr('declKpp', !kppOk);
+    if (!kppOk) errors.push('КПП организации должен состоять ровно из 9 цифр.');
+  }
+
+  // IFNS code
+  const cleanIfns = d.ifns_code.replace(/\D/g, '');
+  const ifnsOk = cleanIfns.length === 4;
+  setFieldErr('declIfnsCode', !ifnsOk);
+  if (!ifnsOk) errors.push('Код налогового органа (ИФНС) должен состоять из 4 цифр.');
+
+  // OKTMO code
+  const cleanOktmo = d.oktmo.replace(/\D/g, '');
+  const oktmoOk = cleanOktmo.length === 8 || cleanOktmo.length === 11;
+  setFieldErr('declOktmo', !oktmoOk);
+  if (!oktmoOk) errors.push('Код ОКТМО должен состоять из 8 или 11 цифр.');
+
+  // Cumulative incomes
+  if (d.income_q2 < d.income_q1) {
+    errors.push('Доход за полугодие (стр. 111) не может быть меньше дохода за I квартал (стр. 110) — нарастающий итог!');
+    setFieldErr('declIncQ2', true);
+  } else {
+    setFieldErr('declIncQ2', false);
+  }
+
+  if (d.income_q3 < d.income_q2) {
+    errors.push('Доход за 9 месяцев (стр. 112) не может быть меньше дохода за полугодие (стр. 111) — нарастающий итог!');
+    setFieldErr('declIncQ3', true);
+  } else {
+    setFieldErr('declIncQ3', false);
+  }
+
+  if (d.income_year < d.income_q3) {
+    errors.push('Доход за налоговый период / год (стр. 113) не может быть меньше дохода за 9 месяцев (стр. 112)!');
+    setFieldErr('declIncYear', true);
+  } else {
+    setFieldErr('declIncYear', false);
+  }
+
+  // Cumulative expenses for 15%
+  if (d.tax_object === '2') {
+    if (d.expense_q2 < d.expense_q1) {
+      errors.push('Расходы за полугодие (стр. 221) не могут быть меньше расходов за I квартал (стр. 220)!');
+      setFieldErr('declExpQ2', true);
+    } else {
+      setFieldErr('declExpQ2', false);
+    }
+
+    if (d.expense_q3 < d.expense_q2) {
+      errors.push('Расходы за 9 месяцев (стр. 222) не могут быть меньше расходов за полугодие (стр. 221)!');
+      setFieldErr('declExpQ3', true);
+    } else {
+      setFieldErr('declExpQ3', false);
+    }
+
+    if (d.expense_year < d.expense_q3) {
+      errors.push('Расходы за год (стр. 223) не могут быть меньше расходов за 9 месяцев (стр. 222)!');
+      setFieldErr('declExpYear', true);
+    } else {
+      setFieldErr('declExpYear', false);
+    }
+  }
+
+  // Update Status Badge and Alert Box
+  const badge = document.getElementById('declValidationBadge');
+  const alertBox = document.getElementById('declValidationAlert');
+  const errList = document.getElementById('declValidationErrorsList');
+
+  if (errors.length === 0) {
+    if (badge) {
+      badge.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200 transition-all';
+      badge.innerHTML = '<i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i><span>Корректно • Контроль пройден</span>';
+    }
+    if (alertBox) alertBox.classList.add('hidden');
+  } else {
+    if (badge) {
+      badge.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-50 text-amber-800 border border-amber-300 transition-all';
+      badge.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i><span>Замечаний: ${errors.length}</span>`;
+    }
+    if (alertBox) {
+      alertBox.classList.remove('hidden');
+      if (errList) {
+        errList.innerHTML = errors.map(e => `<li>${escapeHtml(e)}</li>`).join('');
+      }
+    }
+  }
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  return errors.length === 0;
+}
+
+function renderCells(val, count) {
+  let s = String(val !== undefined && val !== null ? val : '').trim().toUpperCase();
+  if (s.length > count) s = s.substring(0, count);
+  const padded = s.padEnd(count, '-');
+  let html = '<div class="inline-flex flex-wrap">';
+  for (let i = 0; i < count; i++) {
+    html += `<span class="fns-cell">${escapeHtml(padded[i])}</span>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderMoneyCells(val, count) {
+  if (val === null || val === undefined || val === '') {
+    return renderCells('', count);
+  }
+  const num = Math.round(Number(val) || 0);
+  return renderCells(num > 0 ? String(num) : '-', count);
+}
+
+function renderBarcodeHtml(codeStr) {
+  return `
+    <div class="flex flex-col items-start select-none">
+      <div class="flex items-stretch h-6 space-x-[1.5px] bg-white p-0.5">
+        <span class="w-[2px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
+        <span class="w-[3px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
+        <span class="w-[2px] bg-black h-full"></span><span class="w-[3px] bg-black h-full"></span>
+        <span class="w-[1px] bg-white h-full"></span><span class="w-[2px] bg-black h-full"></span>
+        <span class="w-[1px] bg-white h-full"></span><span class="w-[3px] bg-black h-full"></span>
+        <span class="w-[2px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
+        <span class="w-[1px] bg-black h-full"></span><span class="w-[3px] bg-black h-full"></span>
+        <span class="w-[2px] bg-black h-full"></span><span class="w-[2px] bg-black h-full"></span>
+        <span class="w-[1px] bg-white h-full"></span><span class="w-[3px] bg-black h-full"></span>
+        <span class="w-[1px] bg-white h-full"></span><span class="w-[2px] bg-black h-full"></span>
+        <span class="w-[3px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
+        <span class="w-[2px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
+        <span class="w-[3px] bg-black h-full"></span><span class="w-[2px] bg-black h-full"></span>
+        <span class="w-[1px] bg-white h-full"></span><span class="w-[2px] bg-black h-full"></span>
+        <span class="w-[3px] bg-black h-full"></span><span class="w-[1px] bg-white h-full"></span>
+      </div>
+      <span class="text-[8.5px] font-mono tracking-widest text-black font-bold mt-0.5">${escapeHtml(codeStr)}</span>
+    </div>
+  `;
+}
+
+function renderTaxDeclarationPreview() {
+  const container = document.getElementById('fnsPrintArea');
+  if (!container) return;
+
+  const d = getTaxDeclarationFormData();
+  const is15 = d.tax_object === '2';
+  const isIp = d.inn.length === 12;
+
+  // Split company name into 4 rows of 40 chars
+  const compNameUpper = (d.company_name || '').toUpperCase().trim();
+  const compLines = [];
+  for (let i = 0; i < 4; i++) {
+    const start = i * 40;
+    compLines.push(compNameUpper.substring(start, start + 40));
+  }
+
+  const cornerSq = `
+    <div class="fns-corner-sq" style="top: 8mm; left: 8mm;"></div>
+    <div class="fns-corner-sq" style="top: 8mm; right: 8mm;"></div>
+    <div class="fns-corner-sq" style="bottom: 8mm; left: 8mm;"></div>
+    <div class="fns-corner-sq" style="bottom: 8mm; right: 8mm;"></div>
+  `;
+
+  // PAGE 1: TITLE
+  const page1 = `
+    <div class="fns-a4-page">
+      ${cornerSq}
+      
+      <!-- Top header with Barcode and INN/KPP -->
+      <div class="flex items-start justify-between mb-2">
+        ${renderBarcodeHtml('0301 6015')}
+        <div class="space-y-1 text-right">
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">ИНН</span>
+            ${renderCells(d.inn, 12)}
+          </div>
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">КПП</span>
+            ${renderCells(isIp ? '' : d.kpp, 9)}
+          </div>
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">Стр.</span>
+            ${renderCells('001', 3)}
+          </div>
+        </div>
+      </div>
+
+      <!-- Form Title -->
+      <div class="text-right text-[10px] font-bold mb-1">Форма по КНД 1152017</div>
+      <div class="text-center font-bold text-[11px] leading-tight mb-4 uppercase tracking-wide border-b border-black pb-2">
+        Налоговая декларация по налогу, уплачиваемому в связи с применением упрощенной системы налогообложения
+      </div>
+
+      <!-- Parameters Grid -->
+      <div class="space-y-2 text-[10px] mb-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-1">
+            <span>Номер корректировки:</span>
+            ${renderCells(d.correction_num || '0', 3)}
+          </div>
+          <div class="flex items-center space-x-1">
+            <span>Налоговый период (код):</span>
+            ${renderCells('34', 2)}
+          </div>
+          <div class="flex items-center space-x-1">
+            <span>Отчетный год:</span>
+            ${renderCells(d.year, 4)}
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-1">
+            <span>Представляется в налоговый орган (код):</span>
+            ${renderCells(d.ifns_code, 4)}
+          </div>
+          <div class="flex items-center space-x-1">
+            <span>По месту нахождения (учета) (код):</span>
+            ${renderCells(d.location_code || (isIp ? '120' : '214'), 3)}
+          </div>
+        </div>
+      </div>
+
+      <!-- Taxpayer Name -->
+      <div class="text-[10px] mb-3 space-y-1">
+        <div class="font-bold">Налогоплательщик:</div>
+        ${compLines.map(line => `<div>${renderCells(line, 40)}</div>`).join('')}
+      </div>
+
+      <!-- OKTMO and Phone -->
+      <div class="space-y-2 text-[10px] mb-4">
+        <div class="flex items-center space-x-2">
+          <span class="w-48">Код по ОКТМО:</span>
+          ${renderCells(d.oktmo, 11)}
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="w-48">Номер контактного телефона:</span>
+          ${renderCells(d.phone, 20)}
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="w-48">На страницах:</span>
+          ${renderCells('003', 3)}
+          <span class="ml-4">с приложением документов на:</span>
+          ${renderCells('---', 3)}
+          <span>листах</span>
+        </div>
+      </div>
+
+      <!-- Confirmation block (2 columns) -->
+      <div class="border border-black grid grid-cols-2 text-[9px] min-h-[160px]">
+        <div class="p-2 border-r border-black space-y-2 flex flex-col justify-between">
+          <div>
+            <div class="font-bold mb-1">Достоверность и полноту сведений, указанных в настоящей декларации, подтверждаю:</div>
+            <div class="flex items-center space-x-2 mb-2">
+              <span>1 - налогоплательщик, 2 - представитель:</span>
+              ${renderCells(isIp ? '1' : '1', 1)}
+            </div>
+            <div class="space-y-1">
+              <div>${renderCells(compLines[0] || '', 30)}</div>
+              <div>${renderCells(compLines[1] || '', 30)}</div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-black/40">
+            <span>Подпись: _____________</span>
+            <span>Дата: ${new Date().toLocaleDateString('ru-RU')}</span>
+          </div>
+        </div>
+
+        <div class="p-2 space-y-2 bg-slate-50/50 flex flex-col justify-between text-slate-700">
+          <div>
+            <div class="font-bold mb-1 uppercase tracking-wider text-[8.5px]">Заполняется работником налогового органа:</div>
+            <p class="text-[8px] text-slate-500">Сведения о представлении декларации</p>
+          </div>
+          <div class="space-y-1 text-[8.5px]">
+            <div>Способ представления (код): ${renderCells('--', 2)}</div>
+            <div>Дата представления: ${renderCells('----------', 10)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // PAGE 2: SECTION 1
+  const barcodeSec1 = is15 ? '0301 6039' : '0301 6022';
+  const sec1Heading = is15
+    ? 'Раздел 1.2. Сумма налога (авансового платежа по налогу), уплачиваемого в связи с применением упрощенной системы налогообложения (объект налогообложения – доходы, уменьшенные на величину расходов)...'
+    : 'Раздел 1.1. Сумма налога (авансового платежа по налогу), уплачиваемого в связи с применением упрощенной системы налогообложения (объект налогообложения – доходы), подлежащая уплате (уменьшению)...';
+
+  const page2 = `
+    <div class="fns-a4-page">
+      ${cornerSq}
+
+      <div class="flex items-start justify-between mb-2">
+        ${renderBarcodeHtml(barcodeSec1)}
+        <div class="space-y-1 text-right">
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">ИНН</span>
+            ${renderCells(d.inn, 12)}
+          </div>
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">КПП</span>
+            ${renderCells(isIp ? '' : d.kpp, 9)}
+          </div>
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">Стр.</span>
+            ${renderCells('002', 3)}
+          </div>
+        </div>
+      </div>
+
+      <div class="font-bold text-[10px] leading-tight mb-3 border-b border-black pb-2 uppercase">
+        ${sec1Heading}
+      </div>
+
+      <div class="space-y-2 text-[10px]">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Код по ОКТМО (стр. 010):</span>
+          ${renderCells(d.oktmo, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Авансовый платеж за I квартал к уплате (стр. 020):</span>
+          ${renderMoneyCells(d.due_q1, 11)}
+        </div>
+
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Код по ОКТМО (стр. 030):</span>
+          ${renderCells(d.oktmo, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Авансовый платеж за полугодие к доплате (стр. 040):</span>
+          ${renderMoneyCells(d.due_q2, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Авансовый платеж за полугодие к уменьшению (стр. 050):</span>
+          ${renderMoneyCells(d.dec_q2, 11)}
+        </div>
+
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Код по ОКТМО (стр. 060):</span>
+          ${renderCells(d.oktmo, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Авансовый платеж за 9 месяцев к доплате (стр. 070):</span>
+          ${renderMoneyCells(d.due_q3, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Авансовый платеж за 9 месяцев к уменьшению (стр. 080):</span>
+          ${renderMoneyCells(d.dec_q3, 11)}
+        </div>
+
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Код по ОКТМО (стр. 090):</span>
+          ${renderCells(d.oktmo, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span class="font-bold">Налог за налоговый период (год) к доплате (стр. 100):</span>
+          ${renderMoneyCells(d.due_year, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Налог за налоговый период (год) к уменьшению (стр. 110):</span>
+          ${renderMoneyCells(d.dec_year, 11)}
+        </div>
+
+        ${is15 ? `
+          <div class="flex items-center justify-between border-t border-black pt-2 font-bold">
+            <span>Сумма минимального налога к уплате за год (стр. 120):</span>
+            ${renderMoneyCells(d.min_tax, 11)}
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  // PAGE 3: SECTION 2
+  const barcodeSec2 = is15 ? '0301 6084' : '0301 6046';
+  const sec2Heading = is15
+    ? 'Раздел 2.2. Расчет налога, уплачиваемого в связи с применением упрощенной системы налогообложения (объект – доходы, уменьшенные на величину расходов)...'
+    : 'Раздел 2.1.1. Расчет налога, уплачиваемого в связи с применением упрощенной системы налогообложения (объект налогообложения – доходы)';
+
+  const page3 = `
+    <div class="fns-a4-page">
+      ${cornerSq}
+
+      <div class="flex items-start justify-between mb-2">
+        ${renderBarcodeHtml(barcodeSec2)}
+        <div class="space-y-1 text-right">
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">ИНН</span>
+            ${renderCells(d.inn, 12)}
+          </div>
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">КПП</span>
+            ${renderCells(isIp ? '' : d.kpp, 9)}
+          </div>
+          <div class="flex items-center justify-end space-x-1.5 text-[11px] font-bold">
+            <span class="font-sans">Стр.</span>
+            ${renderCells('003', 3)}
+          </div>
+        </div>
+      </div>
+
+      <div class="font-bold text-[10px] leading-tight mb-3 border-b border-black pb-2 uppercase">
+        ${sec2Heading}
+      </div>
+
+      <div class="space-y-2 text-[10px]">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+          <span>Признак налогоплательщика (1 - с работниками, 2 - без) (стр. 102):</span>
+          ${renderCells(d.payer_code || '1', 1)}
+        </div>
+
+        <div class="font-bold uppercase tracking-wider text-[9px] pt-1">Сумма полученных доходов нарастающим итогом (руб.):</div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>За I квартал (${is15 ? 'стр. 210' : 'стр. 110'}):</span>
+          ${renderMoneyCells(d.income_q1, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>За полугодие (${is15 ? 'стр. 211' : 'стр. 111'}):</span>
+          ${renderMoneyCells(d.income_q2, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>За 9 месяцев (${is15 ? 'стр. 212' : 'стр. 112'}):</span>
+          ${renderMoneyCells(d.income_q3, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span class="font-bold">За налоговый период / год (${is15 ? 'стр. 213' : 'стр. 113'}):</span>
+          ${renderMoneyCells(d.income_year, 11)}
+        </div>
+
+        ${is15 ? `
+          <div class="font-bold uppercase tracking-wider text-[9px] pt-1">Сумма произведенных расходов нарастающим итогом (руб.):</div>
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+            <span>За I квартал (стр. 220):</span>
+            ${renderMoneyCells(d.expense_q1, 11)}
+          </div>
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+            <span>За полугодие (стр. 221):</span>
+            ${renderMoneyCells(d.expense_q2, 11)}
+          </div>
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+            <span>За 9 месяцев (стр. 222):</span>
+            ${renderMoneyCells(d.expense_q3, 11)}
+          </div>
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+            <span class="font-bold">За налоговый период / год (стр. 223):</span>
+            ${renderMoneyCells(d.expense_year, 11)}
+          </div>
+        ` : ''}
+
+        <div class="font-bold uppercase tracking-wider text-[9px] pt-1">Ставка налога (%):</div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>За налоговый период (${is15 ? 'стр. 260-263' : 'стр. 120-123'}):</span>
+          ${renderCells(String(d.rate || (is15 ? '15.0' : '6.0')), 5)}
+        </div>
+
+        <div class="font-bold uppercase tracking-wider text-[9px] pt-1">Сумма исчисленного налога / авансового платежа (руб.):</div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>За I квартал (${is15 ? 'стр. 270' : 'стр. 130'}):</span>
+          ${renderMoneyCells(d.tax_q1, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>За полугодие (${is15 ? 'стр. 271' : 'стр. 131'}):</span>
+          ${renderMoneyCells(d.tax_q2, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span>За 9 месяцев (${is15 ? 'стр. 272' : 'стр. 132'}):</span>
+          ${renderMoneyCells(d.tax_q3, 11)}
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+          <span class="font-bold">За налоговый период / год (${is15 ? 'стр. 273' : 'стр. 133'}):</span>
+          ${renderMoneyCells(d.tax_year, 11)}
+        </div>
+
+        ${!is15 ? `
+          <div class="font-bold uppercase tracking-wider text-[9px] pt-1">Страховые взносы и вычеты, уменьшающие налог (руб.):</div>
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+            <span>За I квартал (стр. 140):</span>
+            ${renderMoneyCells(d.deduct_q1, 11)}
+          </div>
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+            <span>За полугодие (стр. 141):</span>
+            ${renderMoneyCells(d.deduct_q2, 11)}
+          </div>
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+            <span>За 9 месяцев (стр. 142):</span>
+            ${renderMoneyCells(d.deduct_q3, 11)}
+          </div>
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1 pl-3">
+            <span class="font-bold">За год (стр. 143):</span>
+            ${renderMoneyCells(d.deduct_year, 11)}
+          </div>
+        ` : `
+          <div class="flex items-center justify-between border-t border-black pt-2 font-bold">
+            <span>Сумма исчисленного минимального налога за год (стр. 280):</span>
+            ${renderMoneyCells(d.min_tax, 11)}
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = page1 + page2 + page3;
+}
+
+async function downloadTaxDeclarationPdf() {
+  if (!state.currentCompanyId) {
+    showToast('Сначала выберите бизнес');
+    return;
+  }
+  const payload = getTaxDeclarationFormData();
+  showToast('Генерация официального PDF бланка КНД 1152017...');
+
+  try {
+    const res = await fetch(`/api/companies/${state.currentCompanyId}/tax-declaration/generate-pdf`, {
+      method: 'POST',
+      headers: getAuthHeaders(true),
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeInn = payload.inn ? payload.inn.replace(/\D/g, '') : 'КНД1152017';
+      a.download = `Декларация_УСН_${payload.year}_${safeInn}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Официальный PDF бланка КНД 1152017 успешно загружен!');
+    } else {
+      const err = await res.json();
+      showToast(err.detail || 'Ошибка формирования PDF декларации');
+    }
+  } catch (err) {
+    console.error('Error generating PDF:', err);
+    showToast('Ошибка при скачивании PDF декларации');
+  }
+}
+
+function printTaxDeclaration() {
+  switchTaxDeclTab('preview');
+  setTimeout(() => {
+    window.print();
+  }, 250);
 }
 
 // 15. Exports
@@ -5079,6 +5983,16 @@ window.onCounterpartyInnInput = onCounterpartyInnInput;
 window.populateCounterpartiesDropdowns = populateCounterpartiesDropdowns;
 window.openTaxDeclarationStubModal = openTaxDeclarationStubModal;
 window.closeTaxDeclarationStubModal = closeTaxDeclarationStubModal;
+window.openTaxDeclarationModal = openTaxDeclarationModal;
+window.closeTaxDeclarationModal = closeTaxDeclarationModal;
+window.changeTaxDeclYear = changeTaxDeclYear;
+window.switchTaxDeclTab = switchTaxDeclTab;
+window.onTaxDeclInputChange = onTaxDeclInputChange;
+window.onTaxDeclObjectChange = onTaxDeclObjectChange;
+window.recalculateTaxDeclaration = recalculateTaxDeclaration;
+window.recalculateFromDatabase = recalculateFromDatabase;
+window.downloadTaxDeclarationPdf = downloadTaxDeclarationPdf;
+window.printTaxDeclaration = printTaxDeclaration;
 window.switchFnsSubTab = switchFnsSubTab;
 window.renderFnsTaxesSubTab = renderFnsTaxesSubTab;
 

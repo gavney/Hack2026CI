@@ -320,3 +320,48 @@ def export_tax_declaration(company_id: str, db: Session = Depends(get_db)):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@router.get("/companies/{company_id}/tax-declaration/data")
+def get_tax_declaration_data_endpoint(
+    company_id: str,
+    year: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Возвращает предварительно рассчитанные показатели декларации УСН
+    для интерактивного редактора с валидацией.
+    """
+    comp = db.query(Company).filter(Company.id == company_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    ops = db.query(Operation).filter(Operation.company_id == company_id).all()
+    from backend.core.tax_declaration_pdf import get_company_tax_declaration_data
+    return get_company_tax_declaration_data(comp, ops, year=year)
+
+@router.post("/companies/{company_id}/tax-declaration/generate-pdf")
+def generate_tax_declaration_pdf_endpoint(
+    company_id: str,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """
+    Генерирует официальный PDF-документ налоговой декларации УСН (КНД 1152017)
+    с черными реперными квадратами, штрихкодами и знакоместами ФНС.
+    """
+    comp = db.query(Company).filter(Company.id == company_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    from backend.core.tax_declaration_pdf import generate_tax_declaration_pdf
+    pdf_bytes = generate_tax_declaration_pdf(payload)
+
+    inn = payload.get("inn", comp.inn)
+    year = payload.get("year", datetime.now().year)
+    filename = f"Declaration_USN_{inn}_{year}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )

@@ -89,6 +89,65 @@
       color: #0f172a !important;
       background-color: #ffffff !important;
     }
+    .fns-cell {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 18px;
+      border: 1px solid #000;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: #000;
+      background-color: #fff;
+      margin-right: 1.5px;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      user-select: none;
+    }
+    .fns-a4-page {
+      width: 210mm;
+      min-height: 297mm;
+      background: #ffffff;
+      padding: 12mm 15mm;
+      position: relative;
+      margin: 0 auto 24px auto;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      border: 1px solid #cbd5e1;
+      font-family: Arial, sans-serif;
+      box-sizing: border-box;
+    }
+    .fns-corner-sq {
+      position: absolute;
+      width: 10mm;
+      height: 10mm;
+      background-color: #000;
+    }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #fnsPrintArea, #fnsPrintArea * {
+        visibility: visible;
+      }
+      #fnsPrintArea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      .fns-a4-page {
+        page-break-after: always;
+        box-shadow: none !important;
+        border: none !important;
+        margin: 0 !important;
+        width: 100% !important;
+        min-height: 100vh !important;
+      }
+    }
   </style>
 </head>
 <body class="text-slate-800 antialiased min-h-screen flex flex-col">
@@ -816,7 +875,7 @@
             </p>
           </div>
           <div class="shrink-0 flex items-center space-x-2">
-            <button onclick="openTaxDeclarationStubModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center space-x-2 shadow-sm">
+            <button onclick="openTaxDeclarationModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center space-x-2 shadow-sm">
               <i data-lucide="file-signature" class="w-4 h-4"></i>
               <span>Создать налоговую декларацию</span>
             </button>
@@ -1027,7 +1086,7 @@
             </p>
 
             <div class="space-y-2 pt-1">
-              <button onclick="openTaxDeclarationStubModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl transition shadow-sm flex items-center justify-center space-x-2">
+              <button onclick="openTaxDeclarationModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl transition shadow-sm flex items-center justify-center space-x-2">
                 <i data-lucide="file-signature" class="w-4 h-4"></i>
                 <span>Создать налоговую декларацию</span>
               </button>
@@ -2623,46 +2682,428 @@
     </div>
   </div>
 
-  <!-- TAX DECLARATION STUB MODAL -->
-  <div id="taxDeclarationStubModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 hidden p-4">
-    <div class="bg-white rounded-3xl max-w-lg w-full p-6 card-shadow border border-slate-100 space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+  <!-- ================= TAX DECLARATION EDITOR MODAL (КНД 1152017) ================= -->
+  <div id="taxDeclarationEditorModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 hidden p-2 sm:p-4">
+    <div class="bg-white rounded-3xl max-w-6xl w-full max-h-[94vh] flex flex-col card-shadow border border-slate-100 overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70 shrink-0">
         <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shadow-2xs">
             <i data-lucide="file-signature" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-sm font-black text-slate-900">Налоговая декларация по УСН</h3>
-            <p class="text-[11px] text-slate-400 font-medium">Форма по КНД 1152017 (годовой расчет)</p>
+            <div class="flex items-center space-x-2">
+              <h3 class="text-base font-black text-slate-900 font-display">Налоговая декларация по УСН</h3>
+              <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">КНД 1152017</span>
+            </div>
+            <p class="text-xs text-slate-500 font-medium">Официальный формат ФНС России • Редактор, авторасчет и валидация бланка</p>
           </div>
         </div>
-        <button onclick="closeTaxDeclarationStubModal()" class="text-slate-400 hover:text-slate-600 p-1">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-      
-      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-2">
-        <div class="font-black flex items-center space-x-1.5 text-amber-950">
-          <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
-          <span>Модуль формирования и редактирования декларации</span>
+
+        <div class="flex items-center space-x-3">
+          <!-- Year Selector -->
+          <div class="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+            <span class="text-slate-400 font-bold">Год:</span>
+            <select id="declYearSelect" onchange="changeTaxDeclYear(this.value)" class="font-extrabold text-slate-900 bg-transparent focus:outline-none cursor-pointer">
+              <option value="2026">2026</option>
+              <option value="2025" selected>2025</option>
+              <option value="2024">2024</option>
+            </select>
+          </div>
+
+          <!-- Live Validation Status Badge -->
+          <div id="declValidationBadge" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200 transition-all">
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+            <span id="declValidationBadgeText">Корректно</span>
+          </div>
+
+          <!-- Close button -->
+          <button onclick="closeTaxDeclarationModal()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-200/60 transition">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
         </div>
-        <p>
-          Возможность создания и редактирования декларации по УСН на конец года находится в разработке и будет активирована по окончании налогового периода.
-        </p>
-        <p class="text-[11px] text-amber-800">
-          Все квартальные налоговые уведомления, расчет базы (доходы / доходы минус расходы) и авансовые платежи автоматически рассчитаны и зафиксированы во вкладке <b>«Слоты и платежи»</b> с тегом <b>«Налоги по УСН/НДС»</b>.
-        </p>
       </div>
 
-      <div class="flex items-center space-x-2 pt-2">
-        <button type="button" onclick="closeTaxDeclarationStubModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition text-xs">
-          Понятно
-        </button>
-        <button type="button" onclick="downloadTaxDeclaration(); closeTaxDeclarationStubModal();" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition shadow-sm text-xs flex items-center justify-center space-x-1">
-          <i data-lucide="download" class="w-3.5 h-3.5"></i>
-          <span>Выгрузить расчетные данные (CSV)</span>
-        </button>
+      <!-- Navigation Tabs & Actions Toolbar -->
+      <div class="flex flex-wrap items-center justify-between px-6 py-2.5 bg-white border-b border-slate-100 gap-2 shrink-0">
+        <div class="flex items-center space-x-1 bg-slate-100/80 p-1 rounded-2xl text-xs font-bold">
+          <button id="btnDeclTabTitle" onclick="switchTaxDeclTab('title')" class="px-3 py-1.5 rounded-xl transition bg-white text-slate-900 shadow-2xs">
+            Лист 1: Титульный
+          </button>
+          <button id="btnDeclTabSec1" onclick="switchTaxDeclTab('sec1')" class="px-3 py-1.5 rounded-xl transition text-slate-500 hover:text-slate-800">
+            Лист 2: Раздел 1 (К уплате)
+          </button>
+          <button id="btnDeclTabSec2" onclick="switchTaxDeclTab('sec2')" class="px-3 py-1.5 rounded-xl transition text-slate-500 hover:text-slate-800">
+            Лист 3: Раздел 2 (Расчет налога)
+          </button>
+          <button id="btnDeclTabPreview" onclick="switchTaxDeclTab('preview')" class="px-3.5 py-1.5 rounded-xl transition text-slate-500 hover:text-slate-800 flex items-center space-x-1">
+            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+            <span>Бланк ФНС (Оригинал)</span>
+          </button>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button onclick="recalculateTaxDeclaration()" class="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold transition flex items-center space-x-1.5 border border-purple-200">
+            <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
+            <span>Авторасчет налогов</span>
+          </button>
+          <button onclick="recalculateFromDatabase()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center space-x-1.5">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Сброс к выписке</span>
+          </button>
+        </div>
       </div>
+
+      <!-- Live Validation Alert Box -->
+      <div id="declValidationAlert" class="hidden mx-6 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 flex items-start space-x-2.5 shrink-0">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+        <div class="flex-1 space-y-1">
+          <div class="font-bold text-amber-950">Контрольные соотношения ФНС требуют внимания:</div>
+          <ul id="declValidationErrorsList" class="list-disc list-inside space-y-0.5 text-amber-800 text-[11px] font-medium"></ul>
+        </div>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="flex-1 overflow-y-auto p-6 bg-slate-50/40">
+        
+        <!-- ================= TAB 1: ТИТУЛЬНЫЙ ЛИСТ ================= -->
+        <div id="declTabTitlePanel" class="space-y-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-2xs space-y-4">
+            <h4 class="text-xs font-black uppercase tracking-wider text-slate-400">1. Реквизиты налогоплательщика и отчетного периода</h4>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">ИНН налогоплательщика</label>
+                <input id="declInn" type="text" maxlength="12" oninput="onTaxDeclInputChange('inn')" class="w-full font-mono text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition" placeholder="10 или 12 цифр">
+                <span id="declInnHint" class="text-[10px] text-slate-400">10 цифр для ЮЛ / 12 для ИП</span>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">КПП (для организаций)</label>
+                <input id="declKpp" type="text" maxlength="9" oninput="onTaxDeclInputChange('kpp')" class="w-full font-mono text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition" placeholder="9 цифр или пусто для ИП">
+                <span id="declKppHint" class="text-[10px] text-slate-400">Не заполняется для ИП (прочерки)</span>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Номер корректировки</label>
+                <input id="declCorrectionNum" type="text" maxlength="3" oninput="onTaxDeclInputChange('correction_num')" class="w-full font-mono text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition" value="0">
+                <span class="text-[10px] text-slate-400">0 — первичная, 1, 2... — уточненная</span>
+              </div>
+
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Налоговый орган (код ИФНС)</label>
+                <input id="declIfnsCode" type="text" maxlength="4" oninput="onTaxDeclInputChange('ifns_code')" class="w-full font-mono text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition" placeholder="4 цифры">
+                <span class="text-[10px] text-slate-400">Код налоговой инспекции по месту учета</span>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Код по месту учета</label>
+                <select id="declLocationCode" onchange="onTaxDeclInputChange('location_code')" class="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition">
+                  <option value="214">214 — По месту нахождения российской организации</option>
+                  <option value="120">120 — По месту жительства ИП</option>
+                </select>
+                <span class="text-[10px] text-slate-400">214 для ООО, 120 для ИП</span>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Код ОКТМО</label>
+                <input id="declOktmo" type="text" maxlength="11" oninput="onTaxDeclInputChange('oktmo')" class="w-full font-mono text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition" placeholder="8 или 11 цифр">
+                <span class="text-[10px] text-slate-400">Код муниципального образования</span>
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block font-bold text-slate-700 mb-1">Наименование организации / ФИО индивидуального предпринимателя</label>
+                <input id="declCompanyName" type="text" maxlength="120" oninput="onTaxDeclInputChange('company_name')" class="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition" placeholder="ООО Компания или ИП Иванов Иван Иванович">
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Номер контактного телефона</label>
+                <input id="declPhone" type="text" maxlength="20" oninput="onTaxDeclInputChange('phone')" class="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition" placeholder="+7 (999) 000-00-00">
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-2xs space-y-4">
+            <h4 class="text-xs font-black uppercase tracking-wider text-slate-400">2. Параметры системы налогообложения</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Объект налогообложения</label>
+                <select id="declTaxObject" onchange="onTaxDeclObjectChange(this.value)" class="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition">
+                  <option value="1">1 — Доходы (ставка 6%)</option>
+                  <option value="2">2 — Доходы, уменьшенные на величину расходов (ставка 15%)</option>
+                </select>
+                <span class="text-[10px] text-slate-400">Определяет разделы 1.1/2.1.1 или 1.2/2.2</span>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Признак налогоплательщика (стр. 102)</label>
+                <select id="declPayerCode" onchange="onTaxDeclInputChange('payer_code')" class="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none transition">
+                  <option value="1">1 — Организации или ИП, производящие выплаты сотрудникам</option>
+                  <option value="2">2 — ИП, не производящие выплат физическим лицам</option>
+                </select>
+                <span class="text-[10px] text-slate-400">Код 2 позволяет уменьшать налог на 100% взносов</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB 2: РАЗДЕЛ 1 (К УПЛАТЕ / УМЕНЬШЕНИЮ) ================= -->
+        <div id="declTabSec1Panel" class="hidden space-y-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-2xs space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h4 id="declSec1Title" class="text-xs font-black text-slate-900 uppercase">Раздел 1.1. Сумма налога / авансовых платежей к уплате (УСН Доходы)</h4>
+                <p class="text-[11px] text-slate-500">Штрих-код 0301 6022 • Обязательства по срокам уплаты</p>
+              </div>
+              <span class="text-xs px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg border border-emerald-200">Лист 2</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+              <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-2">
+                <div class="font-extrabold text-slate-800 flex items-center justify-between">
+                  <span>I Квартал (до 28 апр)</span>
+                  <span class="text-[10px] text-slate-400 font-mono">стр. 020</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">Сумма авансового платежа (руб.)</label>
+                  <input id="declDueQ1" type="number" min="0" oninput="onTaxDeclInputChange('due_q1')" class="w-full font-mono text-sm font-black bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-emerald-500">
+                </div>
+              </div>
+
+              <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-2">
+                <div class="font-extrabold text-slate-800 flex items-center justify-between">
+                  <span>Полугодие (до 28 июл)</span>
+                  <span class="text-[10px] text-slate-400 font-mono">стр. 040/050</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">К доплате (стр. 040)</label>
+                  <input id="declDueQ2" type="number" min="0" oninput="onTaxDeclInputChange('due_q2')" class="w-full font-mono text-sm font-black bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">К уменьшению (стр. 050)</label>
+                  <input id="declDecQ2" type="number" min="0" oninput="onTaxDeclInputChange('dec_q2')" class="w-full font-mono text-sm font-black bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-400 focus:outline-none focus:border-emerald-500">
+                </div>
+              </div>
+
+              <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-2">
+                <div class="font-extrabold text-slate-800 flex items-center justify-between">
+                  <span>9 Месяцев (до 28 окт)</span>
+                  <span class="text-[10px] text-slate-400 font-mono">стр. 070/080</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">К доплате (стр. 070)</label>
+                  <input id="declDueQ3" type="number" min="0" oninput="onTaxDeclInputChange('due_q3')" class="w-full font-mono text-sm font-black bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">К уменьшению (стр. 080)</label>
+                  <input id="declDecQ3" type="number" min="0" oninput="onTaxDeclInputChange('dec_q3')" class="w-full font-mono text-sm font-black bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-400 focus:outline-none focus:border-emerald-500">
+                </div>
+              </div>
+
+              <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 space-y-2">
+                <div class="font-extrabold text-slate-800 flex items-center justify-between">
+                  <span>Год (до 28 мар / 28 апр)</span>
+                  <span class="text-[10px] text-slate-400 font-mono">стр. 100/110</span>
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">К доплате за год (стр. 100)</label>
+                  <input id="declDueYear" type="number" min="0" oninput="onTaxDeclInputChange('due_year')" class="w-full font-mono text-sm font-black bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-emerald-700 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">К уменьшению (стр. 110)</label>
+                  <input id="declDecYear" type="number" min="0" oninput="onTaxDeclInputChange('dec_year')" class="w-full font-mono text-sm font-black bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-400 focus:outline-none focus:border-emerald-500">
+                </div>
+              </div>
+            </div>
+
+            <div id="declMinTaxBlock" class="hidden bg-amber-50/60 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-center justify-between">
+              <div>
+                <span class="font-bold">Минимальный налог (1% от доходов) к уплате (стр. 120):</span>
+                <span class="block text-[11px] text-amber-700">Уплачивается при УСН 15%, если расчетный налог меньше 1% от валового дохода</span>
+              </div>
+              <input id="declMinTax" type="number" min="0" oninput="onTaxDeclInputChange('min_tax')" class="w-36 font-mono text-sm font-black bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-amber-900 text-right focus:outline-none">
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB 3: РАЗДЕЛ 2 (РАСЧЕТ НАЛОГА) ================= -->
+        <div id="declTabSec2Panel" class="hidden space-y-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-2xs space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h4 id="declSec2Title" class="text-xs font-black text-slate-900 uppercase">Раздел 2.1.1. Расчет налога, уплачиваемого в связи с применением УСН (Доходы)</h4>
+                <p class="text-[11px] text-slate-500">Штрих-код 0301 6046 • Нарастающий итог с начала года</p>
+              </div>
+              <button onclick="recalculateTaxDeclaration()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition flex items-center space-x-1 shadow-2xs">
+                <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
+                <span>Пересчитать налоги и авансы</span>
+              </button>
+            </div>
+
+            <!-- Incomes row -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-slate-800">Доходы нарастающим итогом (руб.):</span>
+                <span class="text-[11px] text-slate-400">стр. 110-113 (или 210-213)</span>
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">I квартал</label>
+                  <input id="declIncQ1" type="number" min="0" oninput="onTaxDeclInputChange('income_q1')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">Полугодие</label>
+                  <input id="declIncQ2" type="number" min="0" oninput="onTaxDeclInputChange('income_q2')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">9 месяцев</label>
+                  <input id="declIncQ3" type="number" min="0" oninput="onTaxDeclInputChange('income_q3')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">Налоговый период (Год)</label>
+                  <input id="declIncYear" type="number" min="0" oninput="onTaxDeclInputChange('income_year')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none">
+                </div>
+              </div>
+            </div>
+
+            <!-- Expenses row (conditional for 15%) -->
+            <div id="declExpensesSection" class="hidden space-y-2 pt-2 border-t border-slate-100">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-slate-800">Расходы нарастающим итогом (руб.):</span>
+                <span class="text-[11px] text-slate-400">стр. 220-223</span>
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">I квартал</label>
+                  <input id="declExpQ1" type="number" min="0" oninput="onTaxDeclInputChange('expense_q1')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">Полугодие</label>
+                  <input id="declExpQ2" type="number" min="0" oninput="onTaxDeclInputChange('expense_q2')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">9 месяцев</label>
+                  <input id="declExpQ3" type="number" min="0" oninput="onTaxDeclInputChange('expense_q3')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">Налоговый период (Год)</label>
+                  <input id="declExpYear" type="number" min="0" oninput="onTaxDeclInputChange('expense_year')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none">
+                </div>
+              </div>
+            </div>
+
+            <!-- Tax Rate row -->
+            <div class="space-y-2 pt-2 border-t border-slate-100">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-slate-800">Ставка налога (%):</span>
+                <span class="text-[11px] text-slate-400">стр. 120-123 (или 260-263)</span>
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <input id="declRateQ1" type="number" step="0.1" min="1" max="15" oninput="onTaxDeclInputChange('rate')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900">
+                </div>
+                <div>
+                  <input id="declRateQ2" type="number" step="0.1" min="1" max="15" oninput="onTaxDeclInputChange('rate')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900">
+                </div>
+                <div>
+                  <input id="declRateQ3" type="number" step="0.1" min="1" max="15" oninput="onTaxDeclInputChange('rate')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900">
+                </div>
+                <div>
+                  <input id="declRateYear" type="number" step="0.1" min="1" max="15" oninput="onTaxDeclInputChange('rate')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900">
+                </div>
+              </div>
+            </div>
+
+            <!-- Calculated tax row -->
+            <div class="space-y-2 pt-2 border-t border-slate-100">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-slate-800">Сумма исчисленного налога / авансового платежа (руб.):</span>
+                <span class="text-[11px] text-slate-400">стр. 130-133 (или 270-273)</span>
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">За I квартал</label>
+                  <input id="declTaxQ1" type="number" min="0" oninput="onTaxDeclInputChange('tax_q1')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">За полугодие</label>
+                  <input id="declTaxQ2" type="number" min="0" oninput="onTaxDeclInputChange('tax_q2')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">За 9 месяцев</label>
+                  <input id="declTaxQ3" type="number" min="0" oninput="onTaxDeclInputChange('tax_q3')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-500 mb-1">За год</label>
+                  <input id="declTaxYear" type="number" min="0" oninput="onTaxDeclInputChange('tax_year')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900">
+                </div>
+              </div>
+            </div>
+
+            <!-- Deductions row (insurance premiums) -->
+            <div id="declDeductionsSection" class="space-y-2 pt-2 border-t border-slate-100">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-slate-800">Страховые взносы и вычеты, уменьшающие налог (руб.):</span>
+                <span class="text-[11px] text-slate-400">стр. 140-143</span>
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <input id="declDeductQ1" type="number" min="0" oninput="onTaxDeclInputChange('deduct_q1')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
+                </div>
+                <div>
+                  <input id="declDeductQ2" type="number" min="0" oninput="onTaxDeclInputChange('deduct_q2')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
+                </div>
+                <div>
+                  <input id="declDeductQ3" type="number" min="0" oninput="onTaxDeclInputChange('deduct_q3')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
+                </div>
+                <div>
+                  <input id="declDeductYear" type="number" min="0" oninput="onTaxDeclInputChange('deduct_year')" class="w-full font-mono text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900" placeholder="0">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB 4: ОРИГИНАЛЬНЫЙ БЛАНК ФНС (ПРЕВЬЮ A4) ================= -->
+        <div id="declTabPreviewPanel" class="hidden space-y-4">
+          <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="info" class="w-4 h-4 text-amber-600 shrink-0"></i>
+              <span>Предварительный просмотр официального бланка ФНС России (Форма КНД 1152017) с оптическими маркерами.</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button onclick="printTaxDeclaration()" class="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 font-bold border border-slate-200 rounded-lg text-xs transition flex items-center space-x-1">
+                <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                <span>Печать</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Document Render Area (Printable) -->
+          <div id="fnsPrintArea" class="flex flex-col items-center">
+            <!-- Pages 1, 2, 3 dynamically injected by renderTaxDeclarationPreview() -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer Actions -->
+      <div class="flex flex-wrap items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/70 shrink-0 gap-3">
+        <div class="flex items-center space-x-2 text-xs text-slate-500">
+          <i data-lucide="info" class="w-4 h-4 text-slate-400"></i>
+          <span>Готово к подаче через ЛК ФНС или отправке по ТКС</span>
+        </div>
+
+        <div class="flex items-center space-x-2.5">
+          <button type="button" onclick="closeTaxDeclarationModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold hover:bg-slate-100 transition text-xs">
+            Закрыть
+          </button>
+          <button type="button" onclick="printTaxDeclaration()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold transition text-xs flex items-center space-x-1.5 shadow-2xs">
+            <i data-lucide="printer" class="w-4 h-4 text-slate-600"></i>
+            <span>Печать бланка (А4)</span>
+          </button>
+          <button type="button" onclick="downloadTaxDeclarationPdf()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black transition shadow-sm text-xs flex items-center space-x-2">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>Скачать PDF (КНД 1152017)</span>
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 
