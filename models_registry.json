@@ -2,7 +2,7 @@
   "models": {
     "ML_v2_Canonical": {
       "model_version": "ml-v2.0-canonical",
-      "commit_hash": "711f04b",
+      "commit_hash": "957d254",
       "seed": 42,
       "feature_count": 27,
       "feature_hash": "b7b9aa2e",
@@ -53,7 +53,7 @@
     },
     "Monte_Carlo": {
       "model_version": "monte-carlo-v1.0",
-      "commit_hash": "711f04b",
+      "commit_hash": "957d254",
       "seed": 42,
       "parameters": {
         "engine": "MonteCarloForecaster",
@@ -65,7 +65,7 @@
     },
     "Corridor_v01": {
       "model_version": "stub-0.1",
-      "commit_hash": "711f04b",
+      "commit_hash": "957d254",
       "parameters": {
         "engine": "ForecasterStubV01",
         "k_factor": 1.28155,
