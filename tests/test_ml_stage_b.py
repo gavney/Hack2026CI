@@ -354,3 +354,77 @@ def test_t11_ablation_distinctness():
     h_direct = hashlib.md5(",".join(direct_feats).encode()).hexdigest()[:8]
     assert h_base != h_direct, "Direct forecasting feature set must have distinct hash vs recursive"
 
+
+def test_corridor_width_sqrt_growth():
+    """Verify that ML v2.0 corridor width scales with ~sqrt(h) rather than linearly."""
+    forecaster = MLForecaster()
+    dates = pd.date_range("2026-01-01", periods=90, freq="D")
+    records = [{
+        "operation_date": d.date(),
+        "amount": 20000.0 if i % 2 == 0 else -15000.0,
+        "direction": "Поступление" if i % 2 == 0 else "Списание",
+        "category_id": "cat_trade",
+        "payment_purpose": "Оборот",
+        "balance_eod": 100000.0
+    } for i, d in enumerate(dates)]
+    df = pd.DataFrame(records)
+    cutoff = dates[-1].date()
+
+    r30 = forecaster.forecast(df, 100000.0, cutoff, horizon=30, seed=42)
+    r60 = forecaster.forecast(df, 100000.0, cutoff, horizon=60, seed=42)
+    r90 = forecaster.forecast(df, 100000.0, cutoff, horizon=90, seed=42)
+
+    w30 = r30["days"][-1]["p90"] - r30["days"][-1]["p10"]
+    w60 = r60["days"][-1]["p90"] - r60["days"][-1]["p10"]
+    w90 = r90["days"][-1]["p90"] - r90["days"][-1]["p10"]
+
+    ratio_60_30 = w60 / max(1.0, w30)
+    ratio_90_30 = w90 / max(1.0, w30)
+
+    # sqrt(2) ≈ 1.414, sqrt(3) ≈ 1.732. Linear would be 2.0 and 3.0.
+    assert 1.15 <= ratio_60_30 <= 1.70, f"w60/w30 ratio {ratio_60_30:.3f} deviates from sqrt(2)!"
+    assert 1.35 <= ratio_90_30 <= 2.10, f"w90/w30 ratio {ratio_90_30:.3f} deviates from sqrt(3)!"
+
+
+def test_p_any_ge_max_pointwise():
+    """Verify mathematical property: P(gap anywhere in window) >= max_h P(gap on day h)."""
+    forecaster = MLForecaster()
+    dates = pd.date_range("2026-01-01", periods=60, freq="D")
+    records = [{
+        "operation_date": d.date(),
+        "amount": 25000.0 if i % 3 == 0 else -18000.0,
+        "direction": "Поступление" if i % 3 == 0 else "Списание",
+        "category_id": "cat_trade",
+        "payment_purpose": "Оборот",
+        "balance_eod": 50000.0
+    } for i, d in enumerate(dates)]
+    df = pd.DataFrame(records)
+    cutoff = dates[-1].date()
+
+    res = forecaster.forecast(df, 50000.0, cutoff, horizon=30, seed=42)
+    max_pointwise = max(d["prob_negative"] for d in res["days"])
+    p_any = res["gap_probability"]
+
+    assert p_any >= max_pointwise - 1e-5, f"P_any {p_any} < max pointwise {max_pointwise}"
+
+
+def test_start_negative_p_any_one():
+    """Verify that if starting balance is negative (B0 < 0), P_any is strictly 1.0."""
+    forecaster = MLForecaster()
+    dates = pd.date_range("2026-01-01", periods=60, freq="D")
+    records = [{
+        "operation_date": d.date(),
+        "amount": 10000.0,
+        "direction": "Списание",
+        "category_id": "cat_expense",
+        "payment_purpose": "Расход",
+        "balance_eod": -25000.0
+    } for d in dates]
+    df = pd.DataFrame(records)
+    cutoff = dates[-1].date()
+
+    res = forecaster.forecast(df, -25000.0, cutoff, horizon=30, seed=42)
+    assert res["gap_probability"] == 1.0, f"Expected 1.0, got {res['gap_probability']}"
+    assert res["simulation_meta"]["start_negative"] is True
+
+
