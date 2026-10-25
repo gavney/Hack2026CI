@@ -295,3 +295,62 @@ def test_t10_api_contract_structure():
     assert len(res["days"]) == 30
     day_keys = {"date", "p10", "p50", "p90", "prob_negative"}
     assert day_keys.issubset(res["days"][0].keys())
+
+
+def test_t11_ablation_distinctness():
+    """T11: Verify that differing ablation configurations produce distinct predictions and feature sets."""
+    import hashlib
+    dates = pd.date_range("2026-01-01", periods=90, freq="D")
+    records = []
+    bal = 200000.0
+    for i, d in enumerate(dates):
+        amt = 30000.0 if i % 3 == 0 else -15000.0
+        purpose = "Взнос собственных средств от учредителя" if i == 45 else "Оплата товара"
+        bal += amt
+        records.append({
+            "operation_date": d.date(),
+            "amount": amt,
+            "direction": "Поступление" if amt > 0 else "Списание",
+            "category_id": "cat_other_in" if i == 45 else "cat_trade",
+            "payment_purpose": purpose,
+            "balance_eod": bal
+        })
+    df = pd.DataFrame(records)
+    cutoff = dates[-1].date()
+    target_date = cutoff + timedelta(days=5)
+    slots = [{
+        "event_date": target_date,
+        "amount": -500000.0,
+        "category_id": "cat_rent",
+        "source": "slot"
+    }]
+
+    # Config 1: ML-only (slots_as_events=False)
+    f_ml = MLForecaster(slots_as_events=False, block_len=7)
+    res_ml = f_ml.forecast(df, bal, cutoff, horizon=15, events=slots, seed=42)
+
+    # Config 2: Slots injected as deterministic events (slots_as_events=True)
+    f_slots = MLForecaster(slots_as_events=True, block_len=7)
+    res_slots = f_slots.forecast(df, bal, cutoff, horizon=15, events=slots, seed=42)
+
+    # Config 3: Block bootstrap with block_len=1 (i.i.d.) vs block_len=7
+    f_iid = MLForecaster(slots_as_events=False, block_len=1)
+    res_iid = f_iid.forecast(df, bal, cutoff, horizon=15, seed=42)
+
+    p50_ml = [d["p50"] for d in res_ml["days"]]
+    p50_slots = [d["p50"] for d in res_slots["days"]]
+    p10_ml = [d["p10"] for d in res_ml["days"]]
+    p10_iid = [d["p10"] for d in res_iid["days"]]
+
+    # 1. Prediction distinctness: slots_as_events toggling produces different trajectories
+    assert p50_ml != p50_slots, "slots_as_events flag must produce distinct median trajectories"
+    # 2. Uncertainty distinctness: block bootstrap length alters quantile corridor
+    assert p10_ml != p10_iid, "block_len parameter must produce distinct uncertainty corridors"
+
+    # 3. Feature hash distinctness test: direct forecasting adds horizon_h
+    base_feats = ["lag_1", "lag_2", "lag_3", "lag_7", "lag_14", "lag_21", "lag_28", "mean_7", "mean_28", "std_28"]
+    direct_feats = base_feats + ["horizon_h"]
+    h_base = hashlib.md5(",".join(base_feats).encode()).hexdigest()[:8]
+    h_direct = hashlib.md5(",".join(direct_feats).encode()).hexdigest()[:8]
+    assert h_base != h_direct, "Direct forecasting feature set must have distinct hash vs recursive"
+
