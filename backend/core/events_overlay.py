@@ -167,7 +167,7 @@ class EventsOverlayApplier:
         horizon: int,
         scenario: Optional[Dict[str, Any]] = None,
         is_ml: bool = True,
-        slots_as_events: bool = False
+        slots_as_events: bool = True
     ) -> List[Dict[str, Any]]:
         """
         Normalizes, filters, shifts, deduplicates and applies scenario levers to events.
@@ -215,7 +215,7 @@ class EventsOverlayApplier:
             amt = float(ev.get("amount", 0.0))
             prob = float(ev.get("probability", 1.0))
             prob = max(0.0, min(1.0, prob))
-            cat = ev.get("category_id")
+            cat = ev.get("category_id") or ("cat_revenue_client" if amt > 0 else "cat_other")
 
             # Check collision with detected recurring slots
             is_collision, overridden_id, slot_median = check_slot_collision(
@@ -228,9 +228,8 @@ class EventsOverlayApplier:
                 horizon=horizon
             )
 
-            # In ML models: auto-detected slots are already learned; skip raw 'slot' events unless slots_as_events is enabled
-            if is_ml and src == "slot" and not slots_as_events:
-                continue
+            # Include all slots and events in ML and MC alike
+            # (unless duplicate collision handling is active)
 
             eff_amt = amt
             if is_collision:
@@ -285,7 +284,7 @@ class EventsOverlayApplier:
         overdraft_limit: float = 0.0,
         scenario: Optional[Dict[str, Any]] = None,
         is_ml: bool = True,
-        slots_as_events: bool = False,
+        slots_as_events: bool = True,
         seed: Optional[int] = None
     ) -> Dict[str, Any]:
         """
@@ -331,7 +330,7 @@ class EventsOverlayApplier:
                 # Expected mean shift on median
                 updated_p50[step_idx:] += prob * amt
 
-            if abs(amt) >= 5000.0:
+            if True:  # Include all events in contributions
                 contributions.append({
                     "date": ev_d,
                     "category": ev["category_id"],
@@ -430,7 +429,7 @@ class EventsOverlayApplier:
                 new_p10[step_idx:] = new_p50[step_idx:] - k_factor * sigma_arr[step_idx:]
                 new_p90[step_idx:] = new_p50[step_idx:] + k_factor * sigma_arr[step_idx:]
 
-            if abs(amt) >= 5000.0:
+            if True:  # Include all events in contributions
                 contributions.append({
                     "date": ev_d,
                     "category": ev["category_id"],

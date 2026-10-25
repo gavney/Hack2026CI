@@ -259,8 +259,13 @@ class Alert(Base):
     gap_date = Column(Date, nullable=True)
     shortfall_p10 = Column(Float, default=0.0)
     shortfall_p50 = Column(Float, default=0.0)
+    gap_amount = Column(Float, default=0.0)
+    duration_days = Column(Integer, default=0)
+    duration_text = Column(String(255), nullable=True)
+    main_factor = Column(String(255), nullable=True)
     probability = Column(Float, default=0.0)
     reason = Column(Text, nullable=True)
+    ai_reason = Column(Text, nullable=True)
     actions = Column(JSON, nullable=True)  # List of 3 actionable steps with simulated effects
     acknowledged = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)

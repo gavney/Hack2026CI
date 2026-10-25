@@ -58,6 +58,10 @@ def detect_recurring_slots(
         return []
 
     window_df['day'] = window_df['operation_date'].dt.day
+    if 'counterparty_inn' not in window_df.columns:
+        window_df['counterparty_inn'] = ''
+    if 'counterparty_name' not in window_df.columns:
+        window_df['counterparty_name'] = ''
 
     detected_slots = []
 

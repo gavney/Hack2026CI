@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Manrope', sans-serif;
+  background-color: #F8FAFC;
+  color: #1E293B;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.wallet-header-bg {
+  background: linear-gradient(180deg, #059669 0%, #047857 100%);
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.card-shadow {
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+}
+
+.pill-active {
+  background-color: #059669;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+.pill-inactive {
+  background-color: #F1F5F9;
+  color: #64748B;
+  font-weight: 600;
+}
+
+.pill-inactive:hover {
+  background-color: #E2E8F0;
+  color: #1E293B;
+}
+
+.cab-sub-active {
+  background-color: #059669;
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.cab-sub-inactive {
+  background-color: transparent;
+  color: #64748B;
+  font-weight: 600;
+}
+
+.cab-sub-inactive:hover {
+  background-color: #E2E8F0;
+  color: #0F172A;
+}
+
+select option {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+}
+
+.fns-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 18px;
+  border: 1px solid #000;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #000;
+  background-color: #fff;
+  margin-right: 1.5px;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.fns-a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  background: #ffffff;
+  padding: 12mm 15mm;
+  position: relative;
+  margin: 0 auto 24px auto;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #cbd5e1;
+  font-family: Arial, sans-serif;
+  box-sizing: border-box;
+}
+
+.fns-corner-sq {
+  position: absolute;
+  width: 5mm;
+  height: 5mm;
+  background-color: #000;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #fnsPrintArea, #fnsPrintArea * {
+    visibility: visible;
+  }
+  #fnsPrintArea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  .fns-a4-page {
+    page-break-after: always;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+  }
+}

@@ -70,14 +70,23 @@ app.include_router(integrations.router, prefix=settings.API_PREFIX)
 app.include_router(analytics.router, prefix=settings.API_PREFIX)
 app.include_router(counterparties.router, prefix=settings.API_PREFIX)
 
-# Serve Frontend static assets
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-if os.path.exists(frontend_dir):
-    app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+# Serve Nuxt 3 Frontend
+frontend_public_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", ".output", "public")
+index_html = os.path.join(frontend_public_dir, "index.html")
+
+if os.path.exists(index_html):
+    _nuxt_dir = os.path.join(frontend_public_dir, "_nuxt")
+    if os.path.exists(_nuxt_dir):
+        app.mount("/_nuxt", StaticFiles(directory=_nuxt_dir), name="nuxt_static")
 
     @app.get("/")
     def serve_frontend():
-        return FileResponse(os.path.join(frontend_dir, "index.html"))
+        return FileResponse(index_html)
+else:
+    from fastapi.responses import RedirectResponse
+    @app.get("/")
+    def serve_frontend():
+        return RedirectResponse(url="http://127.0.0.1:3000/")
 
 @app.get("/health")
 def health_check():

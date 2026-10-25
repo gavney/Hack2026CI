@@ -2,6 +2,7 @@
 # Byte-compiled / optimized / DLL files
 # ==========================================
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -17,6 +18,28 @@ htmlcov/
 .hypothesis/
 .ruff_cache/
 .mypy_cache/
+.venv/
+venv/
+env/
+
+# ==========================================
+# Node.js, Nuxt 3 & Frontend Build Outputs
+# ==========================================
+node_modules/
+**/node_modules/
+.nuxt/
+**/.nuxt/
+.output/
+**/.output/
+.nitro/
+**/.nitro/
+dist/
+**/dist/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # ==========================================
 # Environment & Secrets (NEVER commit secrets!)
@@ -24,6 +47,7 @@ htmlcov/
 .env
 .env.local
 .env.*.local
+*.env
 fns_key.txt
 *.key
 *.pem
@@ -39,13 +63,18 @@ fns_key.txt
 *.sqlite3
 
 # ==========================================
-# Heavy Datasets & Raw statements
+# Heavy Datasets, Archives & Large Files
 # ==========================================
 cashflow_dataset_participants/
 data/all_operations.csv
 data/statements/*.csv
 !data/statements/C001.csv
 !data/statements/C004.csv
+*.zip
+*.tar.gz
+*.tar
+*.rar
+*.7z
 
 # ==========================================
 # Operating System & IDE junk
@@ -60,20 +89,23 @@ Thumbs.db
 Desktop.ini
 
 .idea/
+**/.idea/
 .vscode/
+**/.vscode/
 *.swp
 *.swo
 *~
 
 # ==========================================
-# Logs & temporary files
+# Scratch scripts & temporary logs
 # ==========================================
-*.log
-logs/
-tmp/
-temp/
+scratch/
 chat_extracted.txt
 others_sample.txt
 check_others.py
 tests/scratch_*.py
 scripts/scratch_*.py
+*.log
+logs/
+tmp/
+temp/

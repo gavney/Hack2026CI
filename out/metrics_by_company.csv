@@ -1,0 +1,2 @@
+company_id,status,history_days,total_windows,gap_windows,accuracy,precision,recall,f1,balanced_acc,roc_auc,pr_auc,brier,mae_30d,rmse_30d,coverage_p10_p90,mean_w30,median_w30
+C900,success,547,61,0,1.0,n/a (нет положительных),n/a (нет положительных),n/a (нет положительных),n/a (нет положительных),n/a (нет положительных),n/a (нет положительных),0.0075,429834.74,540217.31,85.79,2334291.48,2315842.78

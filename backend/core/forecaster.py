@@ -1,5 +1,6 @@
 import math
 import time
+import logging
 import numpy as np
 import pandas as pd
 from datetime import date, timedelta
@@ -7,6 +8,8 @@ from typing import List, Dict, Any, Optional, Protocol, Set, Tuple
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import TimeSeriesSplit
 from backend.core.slots import is_business_day, next_business_day
+
+logger = logging.getLogger("Forecaster")
 
 H_MAX = 90
 _R_MAT = np.array([[min(s, t) / np.sqrt(s * t) for t in range(1, H_MAX + 1)] for s in range(1, H_MAX + 1)])
@@ -22,7 +25,9 @@ class Forecaster(Protocol):
         events: Optional[List[Dict[str, Any]]] = None,
         scenario: Optional[Dict[str, Any]] = None,
         overdraft_limit: float = 0.0,
-        seed: int = 0
+        detected_slots: Optional[List[Dict[str, Any]]] = None,
+        seed: int = 0,
+        **kwargs
     ) -> Dict[str, Any]:
         ...
 
@@ -92,7 +97,9 @@ class ForecasterStubV01:
         events: Optional[List[Dict[str, Any]]] = None,
         scenario: Optional[Dict[str, Any]] = None,
         overdraft_limit: float = 0.0,
-        seed: int = 0
+        detected_slots: Optional[List[Dict[str, Any]]] = None,
+        seed: int = 0,
+        **kwargs
     ) -> Dict[str, Any]:
         np.random.seed(seed)
         events = events or []
@@ -812,7 +819,7 @@ class MLForecaster:
         lgbm_leaves: int = 7,
         n_simulations: int = 1000,
         block_len: int = 7,
-        slots_as_events: bool = False,
+        slots_as_events: bool = True,
         global_model: Any = None,
         scale_factor: float = 1.0,
         pooled_residuals: Optional[List[float]] = None
@@ -989,6 +996,7 @@ class MLForecaster:
                     fm = Ridge(alpha=self.ridge_alpha, random_state=seed)
                     fm.fit(X_tr_sc, y_arr[tr_idx])
                     oof_residuals.extend((y_arr[te_idx] - fm.predict(X_te_sc)).tolist())
+                logger.info(f"TimeSeriesSplit: число фолдов={len(splits)}, число OOS-остатков={len(oof_residuals)}")
             else:
                 fallback_triggered = True
 
@@ -1034,7 +1042,9 @@ class MLForecaster:
         residuals_pool = np.asarray(oof_residuals if len(oof_residuals) >= 5 else [25000.0], dtype=float)
         # Protective clipping (winsorization) to +/- 5 std(daily_net_flow)
         std_f = max(1000.0, float(np.std(train_flows))) if N > 1 else 25000.0
+        n_clipped = int(np.sum((residuals_pool < -5.0 * std_f) | (residuals_pool > 5.0 * std_f)))
         residuals_pool = np.clip(residuals_pool, -5.0 * std_f, 5.0 * std_f)
+        logger.info(f"Винзоризация: обрезано {n_clipped} значений из {len(residuals_pool)} (порог ±{5.0*std_f:.1f})")
 
         base_p50_flows = ml_p50_flows.copy()
         base_p50_balances = balance_as_of + np.cumsum(base_p50_flows)
@@ -1042,6 +1052,7 @@ class MLForecaster:
         # 6. Block Residual Bootstrap for Trajectory Corridor (B3, N=1000)
         N_sims = self.n_simulations
         L = self.block_len
+        logger.info(f"Бутстреп: число траекторий N={N_sims}, длина блока L={L}")
         if len(residuals_pool) < L:
             repeats = int(math.ceil(L / max(1, len(residuals_pool)))) + 1
             residuals_pool = np.tile(residuals_pool, repeats)
@@ -1073,6 +1084,8 @@ class MLForecaster:
         if detected_slots is None:
             from backend.core.slots import detect_recurring_slots
             detected_slots = detect_recurring_slots(history) if not history.empty else []
+
+        logger.info(f"Наложение слотов и событий: регулярных слотов={len(detected_slots or [])}, событий={len(events or [])}")
 
         overlay_res = overlay_applier.apply_to_trajectories(
             paths=sim_paths,

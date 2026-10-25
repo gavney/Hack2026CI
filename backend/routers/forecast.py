@@ -303,7 +303,11 @@ def get_company_forecast(
     gap_eval = evaluate_cash_gap(
         forecast_result=radar_target,
         mandatory_slots=slots_dicts,
-        overdraft_limit=eff_overdraft
+        overdraft_limit=eff_overdraft,
+        company_name=comp.name,
+        industry=comp.industry,
+        events=events_payload,
+        as_of=as_of
     )
     result["risk_radar"] = gap_eval
 
@@ -319,9 +323,15 @@ def get_company_forecast(
             existing_alert.gap_date = gap_eval["gap_date"]
             existing_alert.shortfall_p10 = gap_eval["shortfall_p10"]
             existing_alert.shortfall_p50 = gap_eval["shortfall_p50"]
+            existing_alert.gap_amount = gap_eval.get("gap_amount", 0.0)
+            existing_alert.duration_days = gap_eval.get("duration_days", 0)
+            existing_alert.duration_text = gap_eval.get("duration_text")
+            # If GigaChat previously filled main_factor/actions, preserve them; otherwise use algorithmic
+            if not existing_alert.ai_reason:
+                existing_alert.main_factor = gap_eval.get("main_factor")
+                existing_alert.actions = gap_eval["actions"]
             existing_alert.probability = gap_eval["probability"]
-            existing_alert.reason = gap_eval["reason"]
-            existing_alert.actions = gap_eval["actions"]
+            existing_alert.reason = gap_eval["reason"]  # Algorithmic text for Radar banner
         else:
             new_alert = Alert(
                 id=gap_eval["id"],
@@ -330,11 +340,24 @@ def get_company_forecast(
                 gap_date=gap_eval["gap_date"],
                 shortfall_p10=gap_eval["shortfall_p10"],
                 shortfall_p50=gap_eval["shortfall_p50"],
+                gap_amount=gap_eval.get("gap_amount", 0.0),
+                duration_days=gap_eval.get("duration_days", 0),
+                duration_text=gap_eval.get("duration_text"),
+                main_factor=gap_eval.get("main_factor"),
                 probability=gap_eval["probability"],
                 reason=gap_eval["reason"],
+                ai_reason=None,
                 actions=gap_eval["actions"]
             )
             db.add(new_alert)
+        db.commit()
+    else:
+        existing_alerts = db.query(Alert).filter(
+            Alert.company_id == company_id,
+            Alert.acknowledged == False
+        ).all()
+        for ea in existing_alerts:
+            ea.acknowledged = True
         db.commit()
 
     if "simulation_meta" not in result or result["simulation_meta"] is None:
@@ -360,11 +383,60 @@ def get_company_alerts(company_id: str, db: Session = Depends(get_db)):
     if not alerts:
         # Pre-calculate forecast on first alerts query to evaluate cash gap if operations exist
         try:
-            get_company_forecast(company_id=company_id, horizon=30, model="ml-v2.0-canonical", db=db)
+            get_company_forecast(company_id=company_id, horizon=30, model="ml-ridge-lgbm", db=db)
             alerts = db.query(Alert).filter(Alert.company_id == company_id).order_by(Alert.created_at.desc()).all()
         except Exception:
             pass
     return alerts
+
+@router.post("/companies/{company_id}/ai-breakdown", response_model=AlertOut)
+def refresh_ai_breakdown(
+    company_id: str,
+    horizon: int = Query(30, ge=7, le=90),
+    model: Optional[str] = Query("ml-ridge-lgbm"),
+    db: Session = Depends(get_db)
+):
+    """
+    Force re-evaluation of cash gap breakdown via GigaChat language model for the 'Разбор' tab.
+    """
+    comp = db.query(Company).filter(Company.id == company_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    forecast_res = get_company_forecast(company_id=company_id, horizon=horizon, model=model, db=db)
+    alert = db.query(Alert).filter(Alert.company_id == company_id, Alert.acknowledged == False).order_by(Alert.created_at.desc()).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Кассовых разрывов не обнаружено, бизнес стабилен")
+
+    from backend.core.risk import generate_gigachat_breakdown
+    active_slots = db.query(Slot).filter(Slot.company_id == company_id, Slot.is_active == True).all()
+    slots_dicts = [{"category_id": s.category_id, "typical_amount": s.typical_amount, "day_of_month": s.day_of_month, "direction": s.direction} for s in active_slots]
+
+    first_day_date = forecast_res.get("days", [{}])[0].get("date") if forecast_res.get("days") else None
+    ai_breakdown = generate_gigachat_breakdown(
+        forecast_result=forecast_res,
+        mandatory_slots=slots_dicts,
+        overdraft_limit=float(comp.overdraft_limit or 0.0),
+        company_name=comp.name,
+        industry=comp.industry,
+        events=forecast_res.get("contributions", []),
+        as_of=first_day_date
+    )
+
+    if ai_breakdown.get("main_factor"):
+        alert.main_factor = ai_breakdown["main_factor"]
+    if ai_breakdown.get("ai_reason"):
+        alert.ai_reason = ai_breakdown["ai_reason"]
+    if ai_breakdown.get("actions"):
+        alert.actions = ai_breakdown["actions"]
+    if ai_breakdown.get("gap_amount"):
+        alert.gap_amount = ai_breakdown["gap_amount"]
+    if ai_breakdown.get("duration_text"):
+        alert.duration_text = ai_breakdown["duration_text"]
+
+    db.commit()
+    db.refresh(alert)
+    return alert
 
 @router.post("/alerts/{alert_id}/acknowledge")
 def acknowledge_alert(alert_id: str, db: Session = Depends(get_db)):

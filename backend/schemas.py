@@ -370,8 +370,13 @@ class AlertOut(BaseModel):
     gap_date: Optional[date] = None
     shortfall_p10: float = 0.0
     shortfall_p50: float = 0.0
+    gap_amount: float = 0.0
+    duration_days: int = 0
+    duration_text: Optional[str] = None
+    main_factor: Optional[str] = None
     probability: float = 0.0
     reason: Optional[str] = None
+    ai_reason: Optional[str] = None
     actions: Optional[List[ActionRecommendation]] = None
     acknowledged: bool = False
     created_at: datetime
