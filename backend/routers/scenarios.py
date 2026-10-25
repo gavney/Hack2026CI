@@ -107,6 +107,7 @@ def compare_scenario(
     amount: Optional[float] = Query(None),
     increase_percent: Optional[float] = Query(None),
     expense_days_ahead: Optional[int] = Query(None),
+    model: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -163,9 +164,11 @@ def compare_scenario(
 
     target_scen_id = sc.id if sc else scenario_id
 
-    # 3. Compute baseline and scenario forecasts
-    baseline = get_company_forecast(company_id=company_id, horizon=horizon, scenario_id=None, model="monte-carlo", db=db)
-    scenario_fc = get_company_forecast(company_id=company_id, horizon=horizon, scenario_id=target_scen_id, model="monte-carlo", db=db)
+    # 3. Compute baseline and scenario forecasts using target model (default canonical ML)
+    comp = db.query(Company).filter(Company.id == company_id).first()
+    target_model = model or (comp.forecast_model if comp and comp.forecast_model else "ml-v2.0-canonical")
+    baseline = get_company_forecast(company_id=company_id, horizon=horizon, scenario_id=None, model=target_model, db=db)
+    scenario_fc = get_company_forecast(company_id=company_id, horizon=horizon, scenario_id=target_scen_id, model=target_model, db=db)
 
     # 4. Compare days
     comparison = []

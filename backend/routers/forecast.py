@@ -274,6 +274,7 @@ def get_company_forecast(
         events=events_payload,
         scenario=scenario_dict,
         overdraft_limit=eff_overdraft,
+        detected_slots=slots_dicts,
         seed=42
     )
 
@@ -281,12 +282,30 @@ def get_company_forecast(
         result["model_version"] = "clean-business"
         result["quality"] = "new_business"
 
-    # Risk evaluation & Alert creation (section 3.6)
+    # Risk evaluation strictly using canonical MLForecaster (ml-v2.0-canonical)
+    if model != "ml-v2.0-canonical" and not is_clean_business:
+        canonical_forecaster = MLForecaster()
+        canonical_res = canonical_forecaster.forecast(
+            history=history_df,
+            balance_as_of=balance_as_of,
+            as_of=as_of,
+            horizon=horizon,
+            events=events_payload,
+            scenario=scenario_dict,
+            overdraft_limit=eff_overdraft,
+            detected_slots=slots_dicts,
+            seed=42
+        )
+        radar_target = canonical_res
+    else:
+        radar_target = result
+
     gap_eval = evaluate_cash_gap(
-        forecast_result=result,
+        forecast_result=radar_target,
         mandatory_slots=slots_dicts,
         overdraft_limit=eff_overdraft
     )
+    result["risk_radar"] = gap_eval
 
     if gap_eval:
         # Save or update alert
@@ -325,13 +344,23 @@ def get_company_forecast(
 
     return result
 
+@router.get("/companies/{company_id}/risk-radar")
+def get_company_risk_radar(
+    company_id: str,
+    horizon: int = Query(30, ge=7, le=90),
+    db: Session = Depends(get_db)
+):
+    """Returns real-time Risk Radar evaluated strictly by canonical ML model (ml-v2.0-canonical)."""
+    fc = get_company_forecast(company_id=company_id, horizon=horizon, model="ml-v2.0-canonical", db=db)
+    return fc.get("risk_radar") or {}
+
 @router.get("/companies/{company_id}/alerts", response_model=List[AlertOut])
 def get_company_alerts(company_id: str, db: Session = Depends(get_db)):
     alerts = db.query(Alert).filter(Alert.company_id == company_id).order_by(Alert.created_at.desc()).all()
     if not alerts:
         # Pre-calculate forecast on first alerts query to evaluate cash gap if operations exist
         try:
-            get_company_forecast(company_id=company_id, horizon=30, model="monte-carlo", db=db)
+            get_company_forecast(company_id=company_id, horizon=30, model="ml-v2.0-canonical", db=db)
             alerts = db.query(Alert).filter(Alert.company_id == company_id).order_by(Alert.created_at.desc()).all()
         except Exception:
             pass

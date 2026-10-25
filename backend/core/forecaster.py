@@ -47,6 +47,7 @@ class AlwaysAlertForecaster:
         events: Optional[List[Dict[str, Any]]] = None,
         scenario: Optional[Dict[str, Any]] = None,
         overdraft_limit: float = 0.0,
+        detected_slots: Optional[List[Dict[str, Any]]] = None,
         seed: int = 42
     ) -> Dict[str, Any]:
         p50 = np.full(horizon, balance_as_of - 1_000_000.0)
@@ -503,7 +504,9 @@ class MonteCarloForecaster:
         events: Optional[List[Dict[str, Any]]] = None,
         scenario: Optional[Dict[str, Any]] = None,
         overdraft_limit: float = 0.0,
-        seed: int = 42
+        detected_slots: Optional[List[Dict[str, Any]]] = None,
+        seed: int = 42,
+        **kwargs
     ) -> Dict[str, Any]:
         t_start = time.perf_counter()
         rng = np.random.default_rng(seed)
@@ -832,7 +835,9 @@ class MLForecaster:
         events: Optional[List[Dict[str, Any]]] = None,
         scenario: Optional[Dict[str, Any]] = None,
         overdraft_limit: float = 0.0,
-        seed: int = 42
+        detected_slots: Optional[List[Dict[str, Any]]] = None,
+        seed: int = 42,
+        **kwargs
     ) -> Dict[str, Any]:
         t_start = time.perf_counter()
         rng = np.random.default_rng(seed)
@@ -905,9 +910,12 @@ class MLForecaster:
 
         # 4. Train Direct Model & Walk-Forward OOF Residuals (B2, B3)
         fallback_triggered = False
+        if N < 120:
+            fallback_triggered = True
         oof_residuals = []
         ml_p50_flows = []
         from sklearn.linear_model import Ridge
+        from sklearn.preprocessing import StandardScaler
 
         s_factor = self.scale_factor if self.global_model is not None else 1.0
 
@@ -969,18 +977,28 @@ class MLForecaster:
             oof_residuals = []
             if len(X_arr) >= 30:
                 tscv = TimeSeriesSplit(n_splits=5)
-                for tr_idx, te_idx in tscv.split(X_arr):
+                splits = list(tscv.split(X_arr))
+                first_tr_len = len(splits[0][0])
+                if first_tr_len < 40 or N < 120:
+                    fallback_triggered = True
+
+                for tr_idx, te_idx in splits:
+                    fold_scaler = StandardScaler()
+                    X_tr_sc = fold_scaler.fit_transform(X_arr[tr_idx])
+                    X_te_sc = fold_scaler.transform(X_arr[te_idx])
                     fm = Ridge(alpha=self.ridge_alpha, random_state=seed)
-                    fm.fit(X_arr[tr_idx], y_arr[tr_idx])
-                    oof_residuals.extend((y_arr[te_idx] - fm.predict(X_arr[te_idx])).tolist())
+                    fm.fit(X_tr_sc, y_arr[tr_idx])
+                    oof_residuals.extend((y_arr[te_idx] - fm.predict(X_te_sc)).tolist())
             else:
                 fallback_triggered = True
 
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X_arr)
             ridge_model = Ridge(alpha=self.ridge_alpha, random_state=seed)
-            ridge_model.fit(X_arr, y_arr)
+            ridge_model.fit(X_scaled, y_arr)
 
             if not oof_residuals or len(oof_residuals) < 20:
-                oof_residuals = (y_arr - ridge_model.predict(X_arr)).tolist()
+                oof_residuals = (y_arr - ridge_model.predict(X_scaled)).tolist()
                 fallback_triggered = True
 
             # Frozen lags at cutoff T (B2 direct forecast)
@@ -996,7 +1014,8 @@ class MLForecaster:
                 row.extend(extract_calendar_features(dt))
                 row.extend(extract_slot_features(dt, events))
 
-                pred_f = float(ridge_model.predict([row])[0])
+                row_sc = scaler.transform([row])
+                pred_f = float(ridge_model.predict(row_sc)[0])
                 if dt.day_of_week >= 5:
                     pred_f = 0.0
 
@@ -1013,29 +1032,12 @@ class MLForecaster:
             oof_residuals = [float(np.std(train_flows)) if N > 1 else 25000.0]
 
         residuals_pool = np.asarray(oof_residuals if len(oof_residuals) >= 5 else [25000.0], dtype=float)
+        # Protective clipping (winsorization) to +/- 5 std(daily_net_flow)
+        std_f = max(1000.0, float(np.std(train_flows))) if N > 1 else 25000.0
+        residuals_pool = np.clip(residuals_pool, -5.0 * std_f, 5.0 * std_f)
 
-        # 5. Deterministic events (only if slots_as_events=True or for scenario/user events)
-        event_vector = np.zeros(horizon, dtype=float)
-        contributions: List[Dict[str, Any]] = []
-
-        if self.slots_as_events and events:
-            for ev in events:
-                ev_d = pd.to_datetime(ev["event_date"]).normalize()
-                if pd.to_datetime(as_of).normalize() < ev_d <= future_dates[-1]:
-                    step_idx = (ev_d - pd.to_datetime(as_of).normalize()).days - 1
-                    if 0 <= step_idx < horizon:
-                        amt = float(ev["amount"]) * float(ev.get("probability", 1.0))
-                        event_vector[step_idx] += amt
-                        if abs(amt) >= 5000.0 and len(contributions) < 15:
-                            contributions.append({
-                                "date": ev_d.date(),
-                                "category": ev.get("category_id", "cat_other"),
-                                "amount": round(amt, 2),
-                                "source": ev.get("source", "slot")
-                            })
-
-        total_mean_flows = ml_p50_flows + event_vector
-        ml_p50_balances = balance_as_of + np.cumsum(total_mean_flows)
+        base_p50_flows = ml_p50_flows.copy()
+        base_p50_balances = balance_as_of + np.cumsum(base_p50_flows)
 
         # 6. Block Residual Bootstrap for Trajectory Corridor (B3, N=1000)
         N_sims = self.n_simulations
@@ -1062,11 +1064,37 @@ class MLForecaster:
             if dt.day_of_week >= 5:
                 sim_flows[:, h] = 0.0
 
-        sim_paths = balance_as_of + np.cumsum(sim_flows + event_vector, axis=1)
+        sim_paths = balance_as_of + np.cumsum(sim_flows, axis=1)
 
-        p10_arr = np.percentile(sim_paths, 10, axis=0)
-        p50_arr = ml_p50_balances
-        p90_arr = np.percentile(sim_paths, 90, axis=0)
+        # 6.5 Apply Unified Events Overlay (backend/core/events_overlay.py)
+        from backend.core.events_overlay import EventsOverlayApplier
+        overlay_applier = EventsOverlayApplier(seed=seed)
+
+        if detected_slots is None:
+            from backend.core.slots import detect_recurring_slots
+            detected_slots = detect_recurring_slots(history) if not history.empty else []
+
+        overlay_res = overlay_applier.apply_to_trajectories(
+            paths=sim_paths,
+            base_p50=base_p50_balances,
+            events=events,
+            detected_slots=detected_slots,
+            as_of=as_of,
+            horizon=horizon,
+            overdraft_limit=overdraft_limit,
+            scenario=scenario,
+            is_ml=True,
+            slots_as_events=self.slots_as_events,
+            seed=seed
+        )
+
+        sim_paths = overlay_res["paths"]
+        p10_arr = overlay_res["p10"]
+        p50_arr = overlay_res["p50"]
+        p90_arr = overlay_res["p90"]
+        prob_neg_arr = overlay_res["prob_negative"]
+        p_any = overlay_res["p_any"]
+        contributions = overlay_res["contributions"]
 
         # Monotonicity Guarantee
         p10_arr = np.minimum(p10_arr, p50_arr)
@@ -1196,7 +1224,9 @@ class OldMLForecaster:
         events: Optional[List[Dict[str, Any]]] = None,
         scenario: Optional[Dict[str, Any]] = None,
         overdraft_limit: float = 0.0,
-        seed: int = 42
+        detected_slots: Optional[List[Dict[str, Any]]] = None,
+        seed: int = 42,
+        **kwargs
     ) -> Dict[str, Any]:
         h_df = history.copy()
         if not h_df.empty and 'operation_date' in h_df.columns:
@@ -1384,7 +1414,9 @@ class Step1Forecaster:
         events: Optional[List[Dict[str, Any]]] = None,
         scenario: Optional[Dict[str, Any]] = None,
         overdraft_limit: float = 0.0,
-        seed: int = 42
+        detected_slots: Optional[List[Dict[str, Any]]] = None,
+        seed: int = 42,
+        **kwargs
     ) -> Dict[str, Any]:
         h_df = history.copy()
         if not h_df.empty and 'operation_date' in h_df.columns:
@@ -1444,7 +1476,10 @@ class Step1Forecaster:
                 y.append(flows[i])
             X_arr = np.asarray(X, dtype=float)
             y_arr = np.asarray(y, dtype=float)
-            model = Ridge(alpha=self.ridge_alpha, random_state=seed).fit(X_arr, y_arr)
+            from sklearn.preprocessing import StandardScaler
+            scaler = StandardScaler()
+            X_sc = scaler.fit_transform(X_arr)
+            model = Ridge(alpha=self.ridge_alpha, random_state=seed).fit(X_sc, y_arr)
         else:
             model = None
 
@@ -1461,7 +1496,8 @@ class Step1Forecaster:
                 row.extend(extract_calendar_features(dt))
                 row.extend(extract_slot_features(dt, events))
 
-                f_pred = float(model.predict([row])[0]) * s_factor if dt.day_of_week < 5 else 0.0
+                row_sc = scaler.transform([row]) if 'scaler' in locals() else [row]
+                f_pred = float(model.predict(row_sc)[0]) * s_factor if dt.day_of_week < 5 else 0.0
                 p50_f.append(f_pred)
                 buf_flows.append(f_pred)
 

@@ -32,6 +32,8 @@ def detect_recurring_slots(
 
     # Map categories to roles
     df = df_ops.copy()
+    if 'category_id' not in df.columns:
+        return []
     if 'cashflow_role' not in df.columns:
         df['cashflow_role'] = df['category_id'].map(lambda cid: CATEGORY_LOOKUP.get(cid, {}).get('cashflow_role', 'variable_out'))
 

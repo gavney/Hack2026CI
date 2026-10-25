@@ -318,6 +318,9 @@ class ForecastContribution(BaseModel):
     category: Optional[str] = "cat_other_out"
     amount: float
     source: str
+    probability: Optional[float] = 1.0
+    is_slot_replacement: Optional[bool] = False
+    overridden_slot_id: Optional[str] = None
 
 class ForecastResultOut(BaseModel):
     model_version: str = "stub-0.1"
@@ -330,6 +333,7 @@ class ForecastResultOut(BaseModel):
     first_gap_date: Optional[date] = None
     gap_probability: float = 0.0
     sample_paths: Optional[List[List[float]]] = None
+    risk_radar: Optional[Dict[str, Any]] = None
     simulation_meta: Optional[Dict[str, Any]] = None
 
 # --- Minimalist Forecast & ML Settings ---
