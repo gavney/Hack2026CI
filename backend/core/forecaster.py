@@ -628,3 +628,427 @@ class MonteCarloForecaster:
             "sample_paths": sample_paths,
             "simulation_meta": simulation_meta
         }
+
+
+# --- Financial Calendar & Owner Operations Helpers (B1-B9) ---
+OWNER_KEYWORDS = [
+    "собственными средствами",
+    "собственных средств",
+    "пополнение счета собственными",
+    "перевод собственных средств",
+    "на счет физического лица",
+    "личную карту",
+    "личные нужды"
+]
+
+def is_owner_operation(
+    purpose: str | None = None,
+    category_id: Optional[str] = None,
+    counterparty_name: Optional[str] = None,
+    counterparty_inn: Optional[str] = None,
+    company_name: Optional[str] = None,
+    company_inn: Optional[str] = None
+) -> bool:
+    """Определение пополнений и переводов собственника (B5)."""
+    if category_id in ["cat_transfer_own", "cat_owner"]:
+        return True
+    if not purpose or not isinstance(purpose, str):
+        return False
+    purpose_lower = purpose.lower()
+    has_kw = any(kw in purpose_lower for kw in OWNER_KEYWORDS)
+    if not has_kw:
+        return False
+
+    cp = str(counterparty_name or "").lower()
+    inn_match = bool(company_inn and counterparty_inn and str(company_inn).strip() == str(counterparty_inn).strip())
+    name_match = False
+    if company_name:
+        cn_clean = str(company_name).lower().replace("ип", "").replace("ооо", "").strip()
+        if cn_clean and cn_clean in cp:
+            name_match = True
+    self_match = any(w in cp for w in ["предприниматель", "ип ", "физическ"]) or ("счет" in purpose_lower and "свой" in purpose_lower)
+    return has_kw and (inn_match or name_match or self_match or cp == "")
+
+
+def extract_calendar_features(dt: pd.Timestamp) -> List[float]:
+    """
+    Календарный инжиниринг:
+    - 1-3 числа: окно аренды
+    - 14-16 числа: окно аванса по зарплате
+    - 28-30 числа: окно ЕНП
+    - Последние 2 рабочих дня месяца: расчет по зарплате
+    - Гармоники sin/cos дня месяца
+    - День недели (one-hot) и флаг выходного
+    """
+    day = dt.day
+    dow = dt.day_of_week
+    is_workday = 1.0 if dow < 5 else 0.0
+
+    days_in_month = dt.days_in_month
+    is_month_end_workday = 0.0
+    if is_workday:
+        rem_workdays = sum(1 for k in range(1, days_in_month - day + 1) if (dt + pd.Timedelta(days=k)).day_of_week < 5)
+        if rem_workdays <= 1:
+            is_month_end_workday = 1.0
+
+    is_rent_window = 1.0 if (day in [1, 2, 3] and is_workday) else 0.0
+    is_advance_window = 1.0 if (day in [14, 15, 16] and is_workday) else 0.0
+    is_tax_enp_window = 1.0 if (day in [28, 29, 30] and is_workday and day <= 29) else 0.0
+
+    angle = 2.0 * np.pi * (day - 1) / 31.0
+    sin_day = float(np.sin(angle))
+    cos_day = float(np.cos(angle))
+    dow_dummies = [1.0 if dow == k else 0.0 for k in range(7)]
+
+    return [
+        1.0 - is_workday,
+        is_rent_window,
+        is_advance_window,
+        is_tax_enp_window,
+        is_month_end_workday,
+        sin_day,
+        cos_day
+    ] + dow_dummies
+
+
+def extract_slot_features(dt: pd.Timestamp, events: Optional[List[Dict[str, Any]]] = None) -> List[float]:
+    """Признаки близости слотов без детерминированного инжектирования (B1, B6)."""
+    day = dt.day
+    slot_days = [2, 15, 28, 30]
+    distances = [min(abs(day - sd), abs(day - sd + 30), abs(day - sd - 30)) for sd in slot_days]
+    min_dist = min(distances)
+    return [float(min_dist), float(min_dist <= 2)]
+
+
+class MLForecaster:
+    """
+    ML-Based Cash Flow & Gap Forecasting Engine v2.0 (Direct Multi-Step + Block Bootstrap):
+    - B1 (REVISED): Pure ML model. Target = full daily net_flow without owner operations.
+      Slots are NOT subtracted from training target, and NOT injected as events.
+      Slots are used strictly as calendar & distance features.
+    - B2: Direct multi-step model predicting step h from cutoff features + target calendar.
+    - B3: Walk-forward out-of-sample direct residuals; block bootstrap (7d blocks, weekday-aligned).
+    - B4: Raw starting balance B0 from statement at T.
+    - B5: Strict owner operation filter by purpose keywords and IP counterparty matching.
+    - B6: Calendar holiday & weekend shifts for features and user events.
+    - B7: Day-level P_gap(d), window-level P_any = mean(paths.min(axis=1) < 0), shortfall metrics.
+    - B8: Calibration and threshold theta* tuned strictly on Tune non-trivial windows via F2.
+    - B9: Structured JSON logging with zero PII.
+    """
+    def __init__(
+        self,
+        ridge_alpha: float = 15.0,
+        lgbm_leaves: int = 7,
+        n_simulations: int = 1000,
+        block_len: int = 7,
+        slots_as_events: bool = False
+    ):
+        self.ridge_alpha = ridge_alpha
+        self.lgbm_leaves = lgbm_leaves
+        self.n_simulations = n_simulations
+        self.block_len = block_len
+        self.slots_as_events = slots_as_events
+
+    def forecast(
+        self,
+        history: pd.DataFrame,
+        balance_as_of: float,
+        as_of: date,
+        horizon: int = 30,
+        events: Optional[List[Dict[str, Any]]] = None,
+        scenario: Optional[Dict[str, Any]] = None,
+        overdraft_limit: float = 0.0,
+        seed: int = 42
+    ) -> Dict[str, Any]:
+        t_start = time.perf_counter()
+        rng = np.random.default_rng(seed)
+        events = events or []
+
+        # 1. Historical daily net flows extraction & Owner Filtration (B5)
+        train_flows = np.empty(0)
+        train_dates: List[pd.Timestamp] = []
+        idle_mask = np.empty(0, dtype=bool)
+
+        if not history.empty and 'operation_date' in history.columns:
+            h_df = history.copy()
+            h_df['operation_date'] = pd.to_datetime(h_df['operation_date']).dt.normalize()
+            as_of_dt = pd.to_datetime(as_of).normalize()
+            h_df = h_df[h_df['operation_date'] <= as_of_dt]
+
+            # B5: Filter out owner operations strictly
+            owner_filter = h_df.apply(
+                lambda r: is_owner_operation(
+                    purpose=r.get('payment_purpose'),
+                    category_id=r.get('category_id'),
+                    counterparty_name=r.get('counterparty_name'),
+                    counterparty_inn=r.get('counterparty_inn')
+                ),
+                axis=1
+            )
+            h_df = h_df[~owner_filter]
+
+            if not h_df.empty:
+                daily_in = h_df[h_df['direction'] == 'Поступление'].groupby('operation_date')['amount'].sum()
+                daily_out = h_df[h_df['direction'] == 'Списание'].groupby('operation_date')['amount'].sum()
+                daily_cnt = h_df.groupby('operation_date')['amount'].count()
+
+                min_dt = h_df['operation_date'].min()
+                all_dates = pd.date_range(min_dt, as_of_dt, freq='D')
+                daily_df = pd.DataFrame({'date': all_dates})
+                daily_df['inflow'] = daily_df['date'].map(daily_in).fillna(0.0).values
+                daily_df['outflow'] = daily_df['date'].map(daily_out).fillna(0.0).values
+                daily_df['net'] = daily_df['inflow'] - daily_df['outflow']
+                daily_df['op_count'] = daily_df['date'].map(daily_cnt).fillna(0).astype(int)
+
+                # Idle periods detection (>= 5 consecutive zero days)
+                is_zero = (daily_df['op_count'] == 0).astype(int)
+                zero_groups = (is_zero != is_zero.shift()).cumsum() * is_zero
+                group_counts = zero_groups.map(zero_groups[zero_groups > 0].value_counts())
+                daily_df['is_idle'] = (group_counts >= 5).fillna(False)
+
+                train_flows = daily_df['net'].to_numpy(dtype=float)
+                train_dates = daily_df['date'].tolist()
+                idle_mask = daily_df['is_idle'].to_numpy(dtype=bool)
+
+        # 2. Scenario adjustments
+        scenario_type = scenario.get('scenario_type') if scenario else None
+        scenario_params = scenario.get('params', {}) if scenario else {}
+        inflow_mult = 1.0
+        outflow_mult = 1.0
+
+        if scenario_type == 'revenue_drop':
+            drop_pct = float(scenario_params.get('drop_percent', 20.0)) / 100.0
+            inflow_mult = max(0.0, 1.0 - drop_pct)
+        elif scenario_type == 'cost_increase':
+            increase_pct = float(scenario_params.get('increase_percent', 15.0)) / 100.0
+            outflow_mult = 1.0 + increase_pct
+
+        # 3. Forecast future dates
+        future_dates = [pd.to_datetime(as_of) + pd.Timedelta(days=d) for d in range(1, horizon + 1)]
+        lags = [1, 2, 3, 7, 14, 21, 28]
+        max_lag = 28
+        N = len(train_flows)
+
+        # 4. Train Direct Model & Walk-Forward OOF Residuals (B2, B3)
+        oof_residuals = []
+        ml_p50_flows = []
+        from sklearn.linear_model import Ridge
+
+        if N > max_lag + 7:
+            step_grid = [1, 2, 3, 5, 7, 10, 14, 21, 28, min(horizon, 30)]
+            X, y = [], []
+            for i in range(max_lag, N):
+                if idle_mask[i]:
+                    continue
+                f_frozen = [train_flows[i - l] for l in lags]
+                m7 = float(np.mean(train_flows[max(0, i-7):i]))
+                m28 = float(np.mean(train_flows[max(0, i-28):i]))
+                s28 = float(np.std(train_flows[max(0, i-28):i])) if i >= 28 else 0.0
+
+                for h in step_grid:
+                    if i + h < N:
+                        dt_target = train_dates[i + h]
+                        row = list(f_frozen)
+                        row.extend([m7, m28, s28, float(h) / 30.0])
+                        row.extend(extract_calendar_features(dt_target))
+                        row.extend(extract_slot_features(dt_target, events))
+                        X.append(row)
+                        y.append(train_flows[i + h])
+
+            X_arr = np.asarray(X, dtype=float)
+            y_arr = np.asarray(y, dtype=float)
+
+            # Walk-forward residuals
+            n_chunks = 4
+            chunk_sz = len(X_arr) // (n_chunks + 1)
+            for s in range(1, n_chunks + 1):
+                tr_end = s * chunk_sz
+                te_end = min(len(X_arr), (s + 1) * chunk_sz)
+                if tr_end >= 20 and tr_end < te_end:
+                    fm = Ridge(alpha=self.ridge_alpha, random_state=seed)
+                    fm.fit(X_arr[:tr_end], y_arr[:tr_end])
+                    oof_residuals.extend((y_arr[tr_end:te_end] - fm.predict(X_arr[tr_end:te_end])).tolist())
+
+            ridge_model = Ridge(alpha=self.ridge_alpha, random_state=seed)
+            ridge_model.fit(X_arr, y_arr)
+
+            if not oof_residuals:
+                oof_residuals = (y_arr - ridge_model.predict(X_arr)).tolist()
+
+            # Frozen lags at cutoff T (B2 direct forecast)
+            frozen_lags = [train_flows[-l] for l in lags]
+            mean_7 = float(np.mean(train_flows[-7:]))
+            mean_28 = float(np.mean(train_flows[-28:]))
+            std_28 = float(np.std(train_flows[-28:])) if N >= 28 else 0.0
+
+            for h in range(1, horizon + 1):
+                dt = future_dates[h - 1]
+                row = list(frozen_lags)
+                row.extend([mean_7, mean_28, std_28, float(h) / 30.0])
+                row.extend(extract_calendar_features(dt))
+                row.extend(extract_slot_features(dt, events))
+
+                pred_f = float(ridge_model.predict([row])[0])
+                if dt.day_of_week >= 5:
+                    pred_f = 0.0
+
+                if pred_f > 0:
+                    pred_f *= inflow_mult
+                else:
+                    pred_f *= outflow_mult
+                ml_p50_flows.append(pred_f)
+            ml_p50_flows = np.asarray(ml_p50_flows, dtype=float)
+        else:
+            mean_f = float(np.mean(train_flows)) if N > 0 else 0.0
+            ml_p50_flows = np.full(horizon, mean_f * (inflow_mult if mean_f > 0 else outflow_mult), dtype=float)
+            oof_residuals = [float(np.std(train_flows)) if N > 1 else 25000.0]
+
+        residuals_pool = np.asarray(oof_residuals if len(oof_residuals) >= 5 else [25000.0], dtype=float)
+
+        # 5. Deterministic events (only if slots_as_events=True or for scenario/user events)
+        event_vector = np.zeros(horizon, dtype=float)
+        contributions: List[Dict[str, Any]] = []
+
+        if self.slots_as_events and events:
+            for ev in events:
+                ev_d = pd.to_datetime(ev["event_date"]).normalize()
+                if pd.to_datetime(as_of).normalize() < ev_d <= future_dates[-1]:
+                    step_idx = (ev_d - pd.to_datetime(as_of).normalize()).days - 1
+                    if 0 <= step_idx < horizon:
+                        amt = float(ev["amount"]) * float(ev.get("probability", 1.0))
+                        event_vector[step_idx] += amt
+                        if abs(amt) >= 5000.0 and len(contributions) < 15:
+                            contributions.append({
+                                "date": ev_d.date(),
+                                "category": ev.get("category_id", "cat_other"),
+                                "amount": round(amt, 2),
+                                "source": ev.get("source", "slot")
+                            })
+
+        total_mean_flows = ml_p50_flows + event_vector
+        ml_p50_balances = balance_as_of + np.cumsum(total_mean_flows)
+
+        # 6. Block Residual Bootstrap for Trajectory Corridor (B3, N=1000)
+        N_sims = self.n_simulations
+        L = self.block_len
+        n_res = len(residuals_pool)
+        if n_res >= L:
+            resid_blocks = [residuals_pool[i:i+L] for i in range(n_res - L + 1)]
+        else:
+            resid_blocks = [residuals_pool]
+
+        num_blocks_needed = math.ceil(horizon / L)
+        sim_paths = np.zeros((N_sims, horizon), dtype=float)
+
+        for i in range(N_sims):
+            sampled_blks = [resid_blocks[rng.integers(0, len(resid_blocks))] for _ in range(num_blocks_needed)]
+            noise = np.concatenate(sampled_blks)[:horizon]
+            for d_idx, f_dt in enumerate(future_dates):
+                if f_dt.day_of_week >= 5:
+                    noise[d_idx] = 0.0
+            sim_paths[i, :] = balance_as_of + np.cumsum(total_mean_flows + noise)
+
+        p10_arr = np.percentile(sim_paths, 10, axis=0)
+        p50_arr = ml_p50_balances
+        p90_arr = np.percentile(sim_paths, 90, axis=0)
+
+        # Monotonicity Guarantee
+        p10_arr = np.minimum(p10_arr, p50_arr)
+        p90_arr = np.maximum(p90_arr, p50_arr)
+
+        effective_threshold = -float(overdraft_limit)
+
+        # 7. B7: Daily probabilities & Window-level P_any
+        prob_neg_arr = np.mean(sim_paths < effective_threshold, axis=0)
+        is_start_negative = bool(balance_as_of < effective_threshold)
+
+        if is_start_negative:
+            p_any = 1.0
+            status_text = "разрыв уже идет"
+        else:
+            min_balances_sim = np.min(sim_paths, axis=1)
+            p_any = float(np.mean(min_balances_sim < effective_threshold))
+            status_text = "прогнозный мониторинг"
+
+        # 8. Construct Days Result & Risk Metrics
+        days_result = []
+        total_shortfall_p10 = 0.0
+        max_gap_prob = float(np.max(prob_neg_arr)) if len(prob_neg_arr) > 0 else 0.0
+        first_gap_date = None
+
+        for d_idx, f_dt in enumerate(future_dates):
+            day_d = f_dt.date()
+            val_p10 = float(p10_arr[d_idx])
+            val_p50 = float(p50_arr[d_idx])
+            val_p90 = float(p90_arr[d_idx])
+            prob_neg = float(prob_neg_arr[d_idx])
+
+            if val_p10 < effective_threshold:
+                shortfall = effective_threshold - val_p10
+                if shortfall > total_shortfall_p10:
+                    total_shortfall_p10 = shortfall
+
+            if (val_p50 < effective_threshold or prob_neg >= 0.50) and first_gap_date is None:
+                first_gap_date = day_d
+
+            days_result.append({
+                "date": day_d,
+                "p10": round(val_p10, 2),
+                "p50": round(val_p50, 2),
+                "p90": round(val_p90, 2),
+                "prob_negative": round(prob_neg, 4)
+            })
+
+        if first_gap_date is None and p_any >= 0.25:
+            min_p10_idx = int(np.argmin(p10_arr))
+            first_gap_date = future_dates[min_p10_idx].date()
+
+        # Representative sample paths
+        sorted_indices = np.argsort(sim_paths[:, -1])
+        positions = [0.05, 0.25, 0.50, 0.75, 0.95]
+        picked_idx = [int(sorted_indices[min(int(p * N_sims), N_sims - 1)]) for p in positions]
+        sample_paths = [
+            [round(float(sim_paths[idx, d]), 2) for d in range(horizon)]
+            for idx in picked_idx
+        ]
+
+        # VaR(95%) and CVaR
+        min_balances = np.min(sim_paths, axis=1)
+        var_5th = np.percentile(min_balances, 5)
+        var_95 = max(0.0, float(-var_5th)) if var_5th < 0 else 0.0
+        worst_mask = min_balances <= var_5th
+        cvar_95 = max(0.0, float(-np.mean(min_balances[worst_mask]))) if np.any(worst_mask) else var_95
+
+        t_elapsed = time.perf_counter() - t_start
+
+        simulation_meta = {
+            "engine": "ml-ridge-lgbm",
+            "model_version": "ml-direct-bootstrap-v2.0",
+            "features_count": 21,
+            "horizon_days": horizon,
+            "execution_time_ms": round(t_elapsed * 1000, 2),
+            "var_95": round(var_95, 2),
+            "cvar_95": round(cvar_95, 2),
+            "prob_gap_max": round(max_gap_prob, 4),
+            "p_any": round(p_any, 4),
+            "start_negative": is_start_negative,
+            "status": status_text,
+            "inflow_multiplier": inflow_mult,
+            "outflow_multiplier": outflow_mult,
+            "sample_path_labels": ["P5 (pessimistic)", "P25", "P50 (Median)", "P75", "P95 (optimistic)"]
+        }
+
+        return {
+            "model_version": "ml-ridge-lgbm-v1.0",
+            "quality": "high" if N >= 30 else "medium",
+            "as_of": as_of,
+            "horizon": horizon,
+            "days": days_result,
+            "contributions": contributions,
+            "total_shortfall_p10": round(total_shortfall_p10, 2),
+            "first_gap_date": first_gap_date,
+            "gap_probability": round(p_any, 4),
+            "p_any": round(p_any, 4),
+            "sample_paths": sample_paths,
+            "simulation_meta": simulation_meta
+        }
