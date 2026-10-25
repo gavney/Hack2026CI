@@ -538,5 +538,42 @@ def test_t17_c004_slots_medians():
     assert abs(slots_map.get(("cat_payroll", 30), 0.0) - 270013.81) < 1.0
 
 
+def test_t18_short_history_companies_no_crash():
+    """T18 (C1.2-FIX3): Fallback robustness on all 10 EXCLUDED_SHORT companies and ultra-short histories."""
+    excluded_cids = ["C046", "C049", "C059", "C068", "C081", "C088", "C105", "C110", "C136", "C142"]
+    ml = MLForecaster()
+
+    for cid in excluded_cids:
+        df = pd.read_csv(f"data/statements/{cid}.csv", sep=";", encoding="utf-8-sig")
+        df["operation_date"] = pd.to_datetime(df["operation_date"])
+        d_max = df["operation_date"].max().date()
+        b0 = float(df["balance_eod"].iloc[-1])
+
+        res = ml.forecast(df, b0, d_max, horizon=30, seed=42)
+        assert res is not None
+        assert len(res["days"]) == 30
+        assert 0.0 <= res["p_any"] <= 1.0
+
+        p10 = np.array([d["p10"] for d in res["days"]])
+        p50 = np.array([d["p50"] for d in res["days"]])
+        p90 = np.array([d["p90"] for d in res["days"]])
+
+        assert np.all(p10 <= p50 + 1e-3), f"Monotonicity violation p10 > p50 in {cid}"
+        assert np.all(p50 <= p90 + 1e-3), f"Monotonicity violation p50 > p90 in {cid}"
+
+    # Extreme fallback test: ultra-short 3-day statement
+    df_ultra_short = pd.DataFrame({
+        "operation_date": pd.date_range("2026-09-01", "2026-09-03", freq="D"),
+        "amount": [50000.0, 30000.0, 20000.0],
+        "direction": ["Поступление", "Списание", "Поступление"],
+        "balance_eod": [50000.0, 20000.0, 40000.0]
+    })
+    res_ultra = ml.forecast(df_ultra_short, 40000.0, df_ultra_short["operation_date"].max().date(), horizon=30, seed=42)
+    assert res_ultra is not None
+    assert len(res_ultra["days"]) == 30
+    assert res_ultra["fallback_triggered"] is True
+
+
+
 
 

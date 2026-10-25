@@ -904,6 +904,7 @@ class MLForecaster:
         N = len(train_flows)
 
         # 4. Train Direct Model & Walk-Forward OOF Residuals (B2, B3)
+        fallback_triggered = False
         oof_residuals = []
         ml_p50_flows = []
         from sklearn.linear_model import Ridge
@@ -972,12 +973,15 @@ class MLForecaster:
                     fm = Ridge(alpha=self.ridge_alpha, random_state=seed)
                     fm.fit(X_arr[tr_idx], y_arr[tr_idx])
                     oof_residuals.extend((y_arr[te_idx] - fm.predict(X_arr[te_idx])).tolist())
+            else:
+                fallback_triggered = True
 
             ridge_model = Ridge(alpha=self.ridge_alpha, random_state=seed)
             ridge_model.fit(X_arr, y_arr)
 
             if not oof_residuals or len(oof_residuals) < 20:
                 oof_residuals = (y_arr - ridge_model.predict(X_arr)).tolist()
+                fallback_triggered = True
 
             # Frozen lags at cutoff T (B2 direct forecast)
             frozen_lags = [train_flows[-l] for l in lags]
@@ -1003,6 +1007,7 @@ class MLForecaster:
                 ml_p50_flows.append(pred_f)
             ml_p50_flows = np.asarray(ml_p50_flows, dtype=float)
         else:
+            fallback_triggered = True
             mean_f = float(np.mean(train_flows)) if N > 0 else 0.0
             ml_p50_flows = np.full(horizon, mean_f * (inflow_mult if mean_f > 0 else outflow_mult), dtype=float)
             oof_residuals = [float(np.std(train_flows)) if N > 1 else 25000.0]
@@ -1035,6 +1040,9 @@ class MLForecaster:
         # 6. Block Residual Bootstrap for Trajectory Corridor (B3, N=1000)
         N_sims = self.n_simulations
         L = self.block_len
+        if len(residuals_pool) < L:
+            repeats = int(math.ceil(L / max(1, len(residuals_pool)))) + 1
+            residuals_pool = np.tile(residuals_pool, repeats)
         n_res = len(residuals_pool)
         n_blocks = int(math.ceil(horizon / L))
         max_start = max(1, n_res - L)
@@ -1136,6 +1144,7 @@ class MLForecaster:
             "features_count": 27,
             "horizon_days": horizon,
             "execution_time_ms": round(t_elapsed * 1000, 2),
+            "fallback_triggered": fallback_triggered,
             "var_95": round(var_95, 2),
             "cvar_95": round(cvar_95, 2),
             "prob_gap_max": round(max_gap_prob, 4),
@@ -1149,7 +1158,7 @@ class MLForecaster:
 
         return {
             "model_version": m_ver,
-            "quality": "high" if N >= 30 else "medium",
+            "quality": "high" if N >= 30 and not fallback_triggered else "medium",
             "as_of": as_of,
             "horizon": horizon,
             "days": days_result,
@@ -1158,6 +1167,7 @@ class MLForecaster:
             "first_gap_date": first_gap_date,
             "gap_probability": round(p_any, 4),
             "p_any": round(p_any, 4),
+            "fallback_triggered": fallback_triggered,
             "sample_paths": sample_paths,
             "simulation_meta": simulation_meta
         }
@@ -1461,7 +1471,16 @@ class Step1Forecaster:
             mean_f = float(np.mean(flows)) if N > 0 else 0.0
             p50 = balance_as_of + np.arange(1, horizon + 1) * mean_f
 
-        sigma_base = 25000.0 * (s_factor / 100000.0) if self.global_model is not None else 25000.0
+        if model is not None and 'X_arr' in locals() and len(X_arr) > 1:
+            res_arr = y_arr - model.predict(X_arr)
+            sigma_base = max(1000.0, float(np.std(res_arr)))
+        elif self.global_model is not None:
+            sigma_base = max(1000.0, 25000.0 * (s_factor / 100000.0))
+        elif N > 1:
+            sigma_base = max(1000.0, float(np.std(flows)))
+        else:
+            sigma_base = 25000.0
+
         sigma_grow = sigma_base * np.arange(1, horizon + 1)
         p10 = p50 - 1.28155 * sigma_grow
         p90 = p50 + 1.28155 * sigma_grow
