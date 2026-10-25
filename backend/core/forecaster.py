@@ -8,6 +8,10 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import TimeSeriesSplit
 from backend.core.slots import is_business_day, next_business_day
 
+H_MAX = 90
+_R_MAT = np.array([[min(s, t) / np.sqrt(s * t) for t in range(1, H_MAX + 1)] for s in range(1, H_MAX + 1)])
+L_CHOLESKY = np.linalg.cholesky(_R_MAT)
+
 class Forecaster(Protocol):
     def forecast(
         self,
@@ -25,6 +29,45 @@ class Forecaster(Protocol):
 def norm_cdf(x: float) -> float:
     """Cumulative standard normal distribution function (error function based)"""
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+class AlwaysAlertForecaster:
+    """
+    Baseline Always Alert Forecaster.
+    Predicts gap probability = 1.0 unconditionally.
+    """
+    def __init__(self):
+        self.version = "baseline-always-alert"
+
+    def forecast(
+        self,
+        history: pd.DataFrame,
+        balance_as_of: float,
+        as_of: date,
+        horizon: int = 30,
+        events: Optional[List[Dict[str, Any]]] = None,
+        scenario: Optional[Dict[str, Any]] = None,
+        overdraft_limit: float = 0.0,
+        seed: int = 42
+    ) -> Dict[str, Any]:
+        p50 = np.full(horizon, balance_as_of - 1_000_000.0)
+        p10 = p50 - 500_000.0
+        p90 = p50 + 500_000.0
+        future_dates = [pd.to_datetime(as_of) + pd.Timedelta(days=d) for d in range(1, horizon + 1)]
+        days_result = [
+            {"date": dt.date(), "p10": float(p10[i]), "p50": float(p50[i]), "p90": float(p90[i]), "prob_negative": 1.0}
+            for i, dt in enumerate(future_dates)
+        ]
+        return {
+            "model_version": self.version,
+            "quality": "low",
+            "as_of": as_of,
+            "horizon": horizon,
+            "days": days_result,
+            "gap_probability": 1.0,
+            "p_any": 1.0,
+            "p_pointwise_max": 1.0,
+            "sample_paths": []
+        }
 
 class ForecasterStubV01:
     """
@@ -67,7 +110,8 @@ class ForecasterStubV01:
             window_df = h_df[h_df['operation_date'] >= min_90_date].copy()
 
             # Exclude own account transfers and discrete slot categories (prevents double-counting)
-            window_df = window_df[~window_df['category_id'].isin(exclude_cats)]
+            if 'category_id' in window_df.columns:
+                window_df = window_df[~window_df['category_id'].isin(exclude_cats)]
 
             # Daily net flow
             daily = window_df.groupby('operation_date').agg(
@@ -278,6 +322,20 @@ class ForecasterStubV01:
         else:
             first_gap_date = None
 
+        p10_arr = np.array([r["p10"] for r in days_result], dtype=float)
+        p50_arr = np.array([r["p50"] for r in days_result], dtype=float)
+        p90_arr = np.array([r["p90"] for r in days_result], dtype=float)
+
+        if balance_as_of < 0:
+            p_any = 1.0
+        else:
+            sigma_eff = np.maximum(1000.0, (p90_arr - p10_arr) / (2.0 * 1.28155))
+            L_sub = L_CHOLESKY[:horizon, :horizon]
+            rng = np.random.default_rng(42)
+            z = rng.standard_normal((1000, horizon))
+            synth = p50_arr + sigma_eff * (z @ L_sub.T)
+            p_any = float(np.mean(np.min(synth, axis=1) < 0))
+
         return {
             "model_version": "stub-0.1",
             "quality": "low",
@@ -287,7 +345,9 @@ class ForecasterStubV01:
             "contributions": contributions,
             "total_shortfall_p10": round(total_shortfall_p10, 2),
             "first_gap_date": first_gap_date,
-            "gap_probability": round(max_gap_prob, 2)
+            "gap_probability": round(max_gap_prob, 2),
+            "p_any": round(p_any, 4),
+            "p_pointwise_max": round(max_gap_prob, 4)
         }
 
 
@@ -335,10 +395,11 @@ class MonteCarloForecaster:
         h_df = h_df[h_df['operation_date'] <= as_of_dt]
 
         # Exclude own transfers and discrete recurring slot categories (double-counting prevention)
-        filter_cats = {'cat_transfer_own'}
-        if exclude_cats:
-            filter_cats.update(exclude_cats)
-        h_df = h_df[~h_df['category_id'].isin(filter_cats)]
+        if 'category_id' in h_df.columns:
+            filter_cats = {'cat_transfer_own'}
+            if exclude_cats:
+                filter_cats.update(exclude_cats)
+            h_df = h_df[~h_df['category_id'].isin(filter_cats)]
 
         if h_df.empty:
             fallback = np.array([0.0])
@@ -617,6 +678,9 @@ class MonteCarloForecaster:
             "sample_path_labels": ["P5 (pessimistic)", "P25", "P50 (median)", "P75", "P95 (optimistic)"]
         }
 
+        p_any = float(np.mean(np.min(paths, axis=1) < 0)) if paths.size > 0 else float(max_gap_prob)
+        p_pw_max = float(max_gap_prob)
+
         return {
             "model_version": "monte-carlo-v1.0",
             "quality": "medium",
@@ -626,7 +690,9 @@ class MonteCarloForecaster:
             "contributions": contributions,
             "total_shortfall_p10": round(total_shortfall_p10, 2),
             "first_gap_date": first_gap_date,
-            "gap_probability": round(max_gap_prob, 4),
+            "gap_probability": round(p_any, 4),
+            "p_any": round(p_any, 4),
+            "p_pointwise_max": round(p_pw_max, 4),
             "sample_paths": sample_paths,
             "simulation_meta": simulation_meta
         }
@@ -743,13 +809,19 @@ class MLForecaster:
         lgbm_leaves: int = 7,
         n_simulations: int = 1000,
         block_len: int = 7,
-        slots_as_events: bool = False
+        slots_as_events: bool = False,
+        global_model: Any = None,
+        scale_factor: float = 1.0,
+        pooled_residuals: Optional[List[float]] = None
     ):
         self.ridge_alpha = ridge_alpha
         self.lgbm_leaves = lgbm_leaves
         self.n_simulations = n_simulations
         self.block_len = block_len
         self.slots_as_events = slots_as_events
+        self.global_model = global_model
+        self.scale_factor = max(float(scale_factor), 1.0)
+        self.pooled_residuals = pooled_residuals
 
     def forecast(
         self,
@@ -836,7 +908,38 @@ class MLForecaster:
         ml_p50_flows = []
         from sklearn.linear_model import Ridge
 
-        if N > max_lag + 7:
+        s_factor = self.scale_factor if self.global_model is not None else 1.0
+
+        if self.global_model is not None:
+            ridge_model = self.global_model
+            if self.pooled_residuals is not None and len(self.pooled_residuals) >= 20:
+                oof_residuals = [r * s_factor for r in self.pooled_residuals]
+            else:
+                oof_residuals = [25000.0]
+
+            frozen_lags = [train_flows[-l] if N >= l else 0.0 for l in lags]
+            mean_7 = float(np.mean(train_flows[-7:])) if N >= 7 else 0.0
+            mean_28 = float(np.mean(train_flows[-28:])) if N >= 28 else 0.0
+            std_28 = float(np.std(train_flows[-28:])) if N >= 28 else 0.0
+
+            for h in range(1, horizon + 1):
+                dt = future_dates[h - 1]
+                row = [l / s_factor for l in frozen_lags]
+                row.extend([mean_7 / s_factor, mean_28 / s_factor, std_28 / s_factor, float(h) / 30.0])
+                row.extend(extract_calendar_features(dt))
+                row.extend(extract_slot_features(dt, events))
+
+                pred_f = float(ridge_model.predict([row])[0]) * s_factor
+                if dt.day_of_week >= 5:
+                    pred_f = 0.0
+
+                if pred_f > 0:
+                    pred_f *= inflow_mult
+                else:
+                    pred_f *= outflow_mult
+                ml_p50_flows.append(pred_f)
+            ml_p50_flows = np.asarray(ml_p50_flows, dtype=float)
+        elif N > max_lag + 7:
             step_grid = [1, 2, 3, 5, 7, 10, 14, 21, 28, min(horizon, 30)]
             X, y = [], []
             for i in range(max_lag, N):
@@ -1026,9 +1129,10 @@ class MLForecaster:
 
         t_elapsed = time.perf_counter() - t_start
 
+        m_ver = "ml-v2.0-canonical" if self.global_model is None else "ml-v2.0-global"
         simulation_meta = {
-            "engine": "ml-v2.0-canonical",
-            "model_version": "ml-v2.0-canonical",
+            "engine": m_ver,
+            "model_version": m_ver,
             "features_count": 27,
             "horizon_days": horizon,
             "execution_time_ms": round(t_elapsed * 1000, 2),
@@ -1044,7 +1148,7 @@ class MLForecaster:
         }
 
         return {
-            "model_version": "ml-v2.0-canonical",
+            "model_version": m_ver,
             "quality": "high" if N >= 30 else "medium",
             "as_of": as_of,
             "horizon": horizon,
@@ -1056,4 +1160,345 @@ class MLForecaster:
             "p_any": round(p_any, 4),
             "sample_paths": sample_paths,
             "simulation_meta": simulation_meta
+        }
+
+
+class OldMLForecaster:
+    """
+    Old ML (LGBM-cumsum quantile autoregression).
+    Canonical baseline representing pre-v2.0 ML architecture:
+    - Ridge autoregression on daily flows + lag balance for P50
+    - LightGBM quantile models (10% and 90%) on residuals
+    - Trajectory uncertainty via Cholesky correlation matrix
+    """
+    def __init__(self, ridge_alpha: float = 10.0, num_leaves: int = 15, lr: float = 0.08, n_estimators: int = 50):
+        self.ridge_alpha = ridge_alpha
+        self.num_leaves = num_leaves
+        self.lr = lr
+        self.n_estimators = n_estimators
+
+    def forecast(
+        self,
+        history: pd.DataFrame,
+        balance_as_of: float,
+        as_of: date,
+        horizon: int = 30,
+        events: Optional[List[Dict[str, Any]]] = None,
+        scenario: Optional[Dict[str, Any]] = None,
+        overdraft_limit: float = 0.0,
+        seed: int = 42
+    ) -> Dict[str, Any]:
+        h_df = history.copy()
+        if not h_df.empty and 'operation_date' in h_df.columns:
+            h_df['operation_date'] = pd.to_datetime(h_df['operation_date']).dt.normalize()
+            as_of_dt = pd.to_datetime(as_of).normalize()
+            h_df = h_df[h_df['operation_date'] <= as_of_dt]
+
+            owner_filter = h_df.apply(
+                lambda r: is_owner_operation(
+                    purpose=r.get('payment_purpose'),
+                    category_id=r.get('category_id'),
+                    counterparty_name=r.get('counterparty_name'),
+                    counterparty_inn=r.get('counterparty_inn')
+                ),
+                axis=1
+            )
+            h_df = h_df[~owner_filter]
+
+            if not h_df.empty:
+                daily_in = h_df[h_df['direction'] == 'Поступление'].groupby('operation_date')['amount'].sum()
+                daily_out = h_df[h_df['direction'] == 'Списание'].groupby('operation_date')['amount'].sum()
+                min_dt = h_df['operation_date'].min()
+                all_dates = pd.date_range(min_dt, as_of_dt, freq='D')
+                daily_df = pd.DataFrame({'date': all_dates})
+                daily_df['inflow'] = daily_df['date'].map(daily_in).fillna(0.0).values
+                daily_df['outflow'] = daily_df['date'].map(daily_out).fillna(0.0).values
+                daily_df['net'] = daily_df['inflow'] - daily_df['outflow']
+                daily_df['balance'] = balance_as_of - daily_df['net'].iloc[::-1].cumsum().iloc[::-1] + daily_df['net']
+            else:
+                daily_df = pd.DataFrame(columns=['date', 'net', 'balance'])
+        else:
+            daily_df = pd.DataFrame(columns=['date', 'net', 'balance'])
+
+        flows = daily_df['net'].to_numpy(dtype=float) if not daily_df.empty else np.zeros(0)
+        balances = daily_df['balance'].to_numpy(dtype=float) if not daily_df.empty else np.zeros(0)
+        dates = daily_df['date'].tolist() if not daily_df.empty else []
+
+        lags = [1, 2, 3, 7, 14, 21, 28]
+        max_lag = 28
+        N = len(flows)
+        future_dates = [pd.to_datetime(as_of) + pd.Timedelta(days=d) for d in range(1, horizon + 1)]
+
+        if N > max_lag + 7:
+            X, y = [], []
+            for i in range(max_lag, N):
+                row = [flows[i - l] for l in lags]
+                row.append(float(np.mean(flows[max(0, i-7):i])))
+                row.append(float(np.mean(flows[max(0, i-28):i])))
+                row.append(float(np.std(flows[max(0, i-7):i])) if i >= 7 else 0.0)
+                row.append(float(np.std(flows[max(0, i-28):i])) if i >= 28 else 0.0)
+                dt = dates[i]
+                row.append(float(dt.day_of_week))
+                row.append(float(dt.day))
+                row.append(float(dt.month))
+                row.append(1.0 if dt.day_of_week >= 5 else 0.0)
+                row.append(float(balances[i-1]))
+                X.append(row)
+                y.append(flows[i])
+
+            X_arr = np.asarray(X, dtype=float)
+            y_arr = np.asarray(y, dtype=float)
+
+            import lightgbm as lgb
+            ridge = Ridge(alpha=self.ridge_alpha, random_state=seed).fit(X_arr, y_arr)
+
+            buf_flows = list(flows[-max_lag:])
+            buf_bal = balances[-1] if len(balances) > 0 else balance_as_of
+            p50_b = []
+            for step in range(horizon):
+                dt = future_dates[step]
+                row = [buf_flows[-l] for l in lags]
+                row.append(float(np.mean(buf_flows[-7:])))
+                row.append(float(np.mean(buf_flows[-28:])))
+                row.append(float(np.std(buf_flows[-7:])))
+                row.append(float(np.std(buf_flows[-28:])))
+                row.append(float(dt.day_of_week))
+                row.append(float(dt.day))
+                row.append(float(dt.month))
+                row.append(1.0 if dt.day_of_week >= 5 else 0.0)
+                row.append(float(buf_bal))
+
+                f_pred = float(ridge.predict([row])[0]) if dt.day_of_week < 5 else 0.0
+                buf_bal += f_pred
+                p50_b.append(buf_bal)
+                buf_flows.append(f_pred)
+
+            p50 = np.asarray(p50_b, dtype=float)
+
+            y_res = y_arr - ridge.predict(X_arr)
+            m10 = lgb.LGBMRegressor(objective="quantile", alpha=0.10, n_estimators=self.n_estimators, num_leaves=self.num_leaves, learning_rate=self.lr, random_state=seed, verbose=-1)
+            m90 = lgb.LGBMRegressor(objective="quantile", alpha=0.90, n_estimators=self.n_estimators, num_leaves=self.num_leaves, learning_rate=self.lr, random_state=seed, verbose=-1)
+            m10.fit(X_arr, y_res)
+            m90.fit(X_arr, y_res)
+
+            p10_b, p90_b = [], []
+            cur_p10, cur_p90 = balance_as_of, balance_as_of
+            buf_lgb = list(flows[-max_lag:])
+
+            for step in range(horizon):
+                dt = future_dates[step]
+                f_row = [buf_lgb[-l] for l in lags]
+                f_row.append(float(np.mean(buf_lgb[-7:])))
+                f_row.append(float(np.mean(buf_lgb[-28:])))
+                f_row.append(float(np.std(buf_lgb[-7:])))
+                f_row.append(float(np.std(buf_lgb[-28:])))
+                f_row.append(float(dt.day_of_week))
+                f_row.append(float(dt.day))
+                f_row.append(float(dt.month))
+                f_row.append(1.0 if dt.day_of_week >= 5 else 0.0)
+                f_row.append(p50[step])
+
+                f10 = float(m10.predict([f_row])[0])
+                f90 = float(m90.predict([f_row])[0])
+                cur_p10 += f10
+                cur_p90 += f90
+
+                p10_b.append(min(cur_p10, p50[step]))
+                p90_b.append(max(cur_p90, p50[step]))
+                buf_lgb.append((f10 + f90) / 2.0)
+
+            p10 = np.asarray(p10_b, dtype=float)
+            p90 = np.asarray(p90_b, dtype=float)
+        else:
+            p50 = np.full(horizon, balance_as_of, dtype=float)
+            p10 = p50 - 50000.0 * np.sqrt(np.arange(1, horizon + 1))
+            p90 = p50 + 50000.0 * np.sqrt(np.arange(1, horizon + 1))
+
+        sigma_eff = np.maximum(1000.0, (p90 - p10) / (2.0 * 1.28155))
+        z_pw = -p50 / sigma_eff
+        p_pw_max = float(np.max(0.5 * (1.0 + np.vectorize(math.erf)(z_pw / np.sqrt(2.0)))))
+
+        if balance_as_of < 0:
+            p_any = 1.0
+            synth = np.zeros((100, horizon))
+        else:
+            L_sub = L_CHOLESKY[:horizon, :horizon]
+            rng = np.random.default_rng(seed)
+            z = rng.standard_normal((1000, horizon))
+            synth = p50 + sigma_eff * (z @ L_sub.T)
+            p_any = float(np.mean(np.min(synth, axis=1) < 0))
+
+        days_result = [
+            {
+                "date": future_dates[i].date(),
+                "p10": round(float(p10[i]), 2),
+                "p50": round(float(p50[i]), 2),
+                "p90": round(float(p90[i]), 2),
+                "prob_negative": round(float(0.5 * (1.0 + math.erf((-p50[i] / (sigma_eff[i] * math.sqrt(2.0)))))), 4)
+            }
+            for i in range(horizon)
+        ]
+
+        return {
+            "model_version": "old-ml-lgbm-cumsum",
+            "quality": "medium",
+            "as_of": as_of,
+            "horizon": horizon,
+            "days": days_result,
+            "gap_probability": round(p_any, 4),
+            "p_any": round(p_any, 4),
+            "p_pointwise_max": round(p_pw_max, 4),
+            "sample_paths": synth
+        }
+
+
+class Step1Forecaster:
+    """
+    Step 1: ML-only Recursive Autoregression.
+    Slots are used strictly as calendar & distance features (not subtracted, not injected).
+    Supports:
+    - Per-Company mode (trains locally)
+    - Global mode (uses pre-trained global_model with scale_factor)
+    """
+    def __init__(self, ridge_alpha: float = 15.0, global_model: Any = None, scale_factor: float = 1.0):
+        self.ridge_alpha = ridge_alpha
+        self.global_model = global_model
+        self.scale_factor = max(float(scale_factor), 1.0)
+
+    def forecast(
+        self,
+        history: pd.DataFrame,
+        balance_as_of: float,
+        as_of: date,
+        horizon: int = 30,
+        events: Optional[List[Dict[str, Any]]] = None,
+        scenario: Optional[Dict[str, Any]] = None,
+        overdraft_limit: float = 0.0,
+        seed: int = 42
+    ) -> Dict[str, Any]:
+        h_df = history.copy()
+        if not h_df.empty and 'operation_date' in h_df.columns:
+            h_df['operation_date'] = pd.to_datetime(h_df['operation_date']).dt.normalize()
+            as_of_dt = pd.to_datetime(as_of).normalize()
+            h_df = h_df[h_df['operation_date'] <= as_of_dt]
+
+            owner_filter = h_df.apply(
+                lambda r: is_owner_operation(
+                    purpose=r.get('payment_purpose'),
+                    category_id=r.get('category_id'),
+                    counterparty_name=r.get('counterparty_name'),
+                    counterparty_inn=r.get('counterparty_inn')
+                ),
+                axis=1
+            )
+            h_df = h_df[~owner_filter]
+
+            if not h_df.empty:
+                daily_in = h_df[h_df['direction'] == 'Поступление'].groupby('operation_date')['amount'].sum()
+                daily_out = h_df[h_df['direction'] == 'Списание'].groupby('operation_date')['amount'].sum()
+                min_dt = h_df['operation_date'].min()
+                all_dates = pd.date_range(min_dt, as_of_dt, freq='D')
+                daily_df = pd.DataFrame({'date': all_dates})
+                daily_df['inflow'] = daily_df['date'].map(daily_in).fillna(0.0).values
+                daily_df['outflow'] = daily_df['date'].map(daily_out).fillna(0.0).values
+                daily_df['net'] = daily_df['inflow'] - daily_df['outflow']
+            else:
+                daily_df = pd.DataFrame(columns=['date', 'net'])
+        else:
+            daily_df = pd.DataFrame(columns=['date', 'net'])
+
+        flows = daily_df['net'].to_numpy(dtype=float) if not daily_df.empty else np.zeros(0)
+        dates = daily_df['date'].tolist() if not daily_df.empty else []
+
+        lags = [1, 2, 3, 7, 14, 21, 28]
+        max_lag = 28
+        N = len(flows)
+        future_dates = [pd.to_datetime(as_of) + pd.Timedelta(days=d) for d in range(1, horizon + 1)]
+
+        s_factor = self.scale_factor if self.global_model is not None else 1.0
+
+        if self.global_model is not None:
+            model = self.global_model
+        elif N > max_lag + 7:
+            X, y = [], []
+            for i in range(max_lag, N):
+                row = [flows[i - l] for l in lags]
+                row.append(float(np.mean(flows[max(0, i-7):i])))
+                row.append(float(np.mean(flows[max(0, i-28):i])))
+                row.append(float(np.std(flows[max(0, i-7):i])) if i >= 7 else 0.0)
+                row.append(float(np.std(flows[max(0, i-28):i])) if i >= 28 else 0.0)
+                dt = dates[i]
+                row.extend(extract_calendar_features(dt))
+                row.extend(extract_slot_features(dt, events))
+                X.append(row)
+                y.append(flows[i])
+            X_arr = np.asarray(X, dtype=float)
+            y_arr = np.asarray(y, dtype=float)
+            model = Ridge(alpha=self.ridge_alpha, random_state=seed).fit(X_arr, y_arr)
+        else:
+            model = None
+
+        if model is not None and N >= max_lag:
+            buf_flows = list(flows[-max_lag:])
+            p50_f = []
+            for step in range(horizon):
+                dt = future_dates[step]
+                row = [buf_flows[-l] / s_factor for l in lags]
+                row.append(float(np.mean(buf_flows[-7:])) / s_factor)
+                row.append(float(np.mean(buf_flows[-28:])) / s_factor)
+                row.append(float(np.std(buf_flows[-7:])) / s_factor)
+                row.append(float(np.std(buf_flows[-28:])) / s_factor)
+                row.extend(extract_calendar_features(dt))
+                row.extend(extract_slot_features(dt, events))
+
+                f_pred = float(model.predict([row])[0]) * s_factor if dt.day_of_week < 5 else 0.0
+                p50_f.append(f_pred)
+                buf_flows.append(f_pred)
+
+            p50_flows = np.asarray(p50_f, dtype=float)
+            p50 = balance_as_of + np.cumsum(p50_flows)
+        else:
+            mean_f = float(np.mean(flows)) if N > 0 else 0.0
+            p50 = balance_as_of + np.arange(1, horizon + 1) * mean_f
+
+        sigma_base = 25000.0 * (s_factor / 100000.0) if self.global_model is not None else 25000.0
+        sigma_grow = sigma_base * np.arange(1, horizon + 1)
+        p10 = p50 - 1.28155 * sigma_grow
+        p90 = p50 + 1.28155 * sigma_grow
+
+        z_pw = -p50 / (sigma_grow * math.sqrt(2.0))
+        p_pw_max = float(np.max(0.5 * (1.0 + np.vectorize(math.erf)(z_pw))))
+
+        if balance_as_of < 0:
+            p_any = 1.0
+            synth = np.zeros((100, horizon))
+        else:
+            L_sub = L_CHOLESKY[:horizon, :horizon]
+            rng = np.random.default_rng(seed)
+            z = rng.standard_normal((1000, horizon))
+            synth = p50 + sigma_grow * (z @ L_sub.T)
+            p_any = float(np.mean(np.min(synth, axis=1) < 0))
+
+        days_result = [
+            {
+                "date": future_dates[i].date(),
+                "p10": round(float(p10[i]), 2),
+                "p50": round(float(p50[i]), 2),
+                "p90": round(float(p90[i]), 2),
+                "prob_negative": round(float(0.5 * (1.0 + math.erf((-p50[i] / (sigma_grow[i] * math.sqrt(2.0)))))), 4)
+            }
+            for i in range(horizon)
+        ]
+
+        ver_str = "step1-ml-only-global" if self.global_model is not None else "step1-ml-only-recursive"
+        return {
+            "model_version": ver_str,
+            "quality": "medium",
+            "as_of": as_of,
+            "horizon": horizon,
+            "days": days_result,
+            "gap_probability": round(p_any, 4),
+            "p_any": round(p_any, 4),
+            "p_pointwise_max": round(p_pw_max, 4),
+            "sample_paths": synth
         }
