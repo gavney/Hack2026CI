@@ -1,6 +1,6 @@
 // Global Application State
 let state = {
-  currentCompanyId: localStorage.getItem('ci_radar_company_id') || null,
+  currentCompanyId: localStorage.getItem('ci_radar_company_id') || 'C001',
   companies: [],
   currentHorizon: 30,
   activeTab: 'radar',
@@ -13,7 +13,7 @@ let state = {
   scenarioChartInstance: null,
   modalDirection: 'inflow',
   selectedFile: null,
-  selectedModel: 'monte-carlo',
+  selectedModel: 'ml-ridge-lgbm',
   debugMode: false,
   counterparties: [],
   cpFilter: 'all',
@@ -63,11 +63,10 @@ function renderCompanySelectDropdown(activeId) {
 
   if (!state.currentUser || !state.companies || state.companies.length === 0) {
     const opt = document.createElement('option');
-    opt.value = "";
-    opt.textContent = "— Войдите в аккаунт для выбора бизнеса —";
-    opt.disabled = true;
+    opt.value = "C001";
+    opt.textContent = "ООО «Агро-063» (Демо • ИНН 6164000001)";
     opt.selected = true;
-    opt.className = "text-slate-500 bg-white font-semibold";
+    opt.className = "text-slate-900 bg-white font-semibold";
     select.appendChild(opt);
 
     const promptOpt = document.createElement('option');
@@ -103,10 +102,10 @@ function renderCompanySelectDropdown(activeId) {
 async function loadUserProfile() {
   if (!state.authToken) {
     state.currentUser = null;
-    state.currentCompanyId = null;
+    state.currentCompanyId = 'C001';
     renderUserHeader(null);
-    renderCompanySelectDropdown(null);
-    renderEmptyGuestDashboard();
+    renderCompanySelectDropdown('C001');
+    await loadAllCompanyData('C001');
     return;
   }
 
@@ -451,7 +450,7 @@ async function submitNewBusiness(e) {
 
 // 3. Load all data for active company
 async function loadAllCompanyData(companyId) {
-  if (!companyId || !state.currentUser) {
+  if (!companyId) {
     renderEmptyGuestDashboard();
     return;
   }
@@ -536,9 +535,12 @@ function renderCompanyHeader() {
 
 // 4. Load & Render Forecast
 async function loadForecastData() {
+  const chartWrapper = document.getElementById('forecastChart')?.parentElement;
   try {
-    const modelParam = state.selectedModel || 'monte-carlo';
-    const res = await fetch(`/api/companies/${state.currentCompanyId}/forecast?horizon=${state.currentHorizon}&model=${modelParam}`);
+    if (chartWrapper) chartWrapper.style.opacity = '0.6';
+    const companyId = state.currentCompanyId || 'C001';
+    const modelParam = state.selectedModel || 'ml-ridge-lgbm';
+    const res = await fetch(`/api/companies/${companyId}/forecast?horizon=${state.currentHorizon}&model=${modelParam}`);
     if (!res.ok) throw new Error('Ошибка расчета прогноза');
     state.forecastData = await res.json();
 
@@ -552,10 +554,20 @@ async function loadForecastData() {
     const modelTag = document.getElementById('modelTagLabel');
     if (modelTag && state.forecastData) {
       const v = state.forecastData.model_version || modelParam;
-      modelTag.innerText = v === 'monte-carlo-v1.0' ? 'Монте-Карло (1 000 симуляций)' : (v === 'stub-0.1' ? 'Статистический тренд' : v);
+      if (v.includes('ml-ridge') || v.includes('lgbm') || v.includes('ml-')) {
+        modelTag.innerText = '⚡ ML-модель (Ridge + LightGBM + Platt)';
+      } else if (v.startsWith('monte-carlo')) {
+        modelTag.innerText = '🎲 Монте-Карло (1 000 симуляций)';
+      } else if (v === 'stub-0.1') {
+        modelTag.innerText = '📊 Коридор v0.1 (Статистический тренд)';
+      } else {
+        modelTag.innerText = v;
+      }
     }
   } catch (err) {
     console.error('Error fetching forecast:', err);
+  } finally {
+    if (chartWrapper) chartWrapper.style.opacity = '1';
   }
 }
 
@@ -577,16 +589,24 @@ function setHorizon(days) {
 // --- Model Switcher ---
 function setModel(modelId) {
   state.selectedModel = modelId;
-  // Update button styles
-  const mcBtn = document.getElementById('model-btn-mc');
-  const stubBtn = document.getElementById('model-btn-stub');
-  if (modelId === 'monte-carlo') {
-    if (mcBtn) mcBtn.className = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow-sm transition flex items-center gap-1";
-    if (stubBtn) stubBtn.className = "px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-900 transition flex items-center gap-1";
-  } else {
-    if (stubBtn) stubBtn.className = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow-sm transition flex items-center gap-1";
-    if (mcBtn) mcBtn.className = "px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-900 transition flex items-center gap-1";
-  }
+  const mapping = {
+    'ml-ridge-lgbm': 'ml',
+    'monte-carlo': 'mc',
+    'stub-0.1': 'stub'
+  };
+  const activeKey = mapping[modelId] || 'ml';
+
+  ['ml', 'mc', 'stub'].forEach(k => {
+    const btn = document.getElementById(`model-btn-${k}`);
+    if (btn) {
+      if (k === activeKey) {
+        btn.className = "px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-medium shadow-sm transition flex items-center gap-1.5 text-xs";
+      } else {
+        btn.className = "px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 font-medium transition flex items-center gap-1.5 text-xs";
+      }
+    }
+  });
+
   loadForecastData();
 }
 
@@ -6200,7 +6220,7 @@ function applyCounterpartyToRadar() {
   closeCounterpartyDetailModal();
   switchTab('radar');
   showToast('Смоделирован прогноз с учетом рисков контрагента');
-  fetchForecast(state.currentCompanyId, state.currentHorizon);
+  loadForecastData();
 }
 
 // Add Counterparty Modal

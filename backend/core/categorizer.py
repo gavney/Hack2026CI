@@ -273,7 +273,22 @@ def classify_operation(
             if rule["pattern"].search(search_text):
                 return rule["category_id"], rule["confidence"], "rule"
 
-    # 3. Fallback
+    # 3. Tier 2 (ML) & Tier 3 (LLM) cascade
+    try:
+        from backend.core.ai_categorizer import cascade_categorizer
+        cat_id, conf, src, _, _, _ = cascade_categorizer.classify_single(
+            direction=direction,
+            purpose=payment_purpose,
+            counterparty_inn=counterparty_inn,
+            counterparty_name=counterparty_name,
+            memory_dict=memory_dict
+        )
+        if src != "default":
+            return cat_id, conf, src
+    except Exception:
+        pass
+
+    # 4. Fallback
     if direction == "Поступление":
         return "cat_other_in", 0.50, "rule_fallback"
     else:

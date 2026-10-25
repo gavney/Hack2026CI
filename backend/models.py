@@ -70,6 +70,14 @@ class Company(Base):
     average_daily_turnover = Column(Float, default=0.0)
     data_quality_score = Column(Float, default=100.0)
     
+    # ML & Forecasting settings
+    forecast_model = Column(String(50), default="ml-ridge-lgbm")  # ml-ridge-lgbm | monte-carlo | stub-0.1
+    forecast_simulations = Column(Integer, default=1000)
+    forecast_confidence_level = Column(Float, default=0.90)
+    ml_categorizer_threshold = Column(Float, default=0.60)
+    gigachat_enabled = Column(Boolean, default=False)
+    gigachat_credentials = Column(String(500), nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -144,6 +152,11 @@ class Operation(Base):
     category_confidence = Column(Float, default=1.0)
     category_source = Column(String(50), default="rule")  # rule | ml | llm | user | memory
     is_duplicate = Column(Boolean, default=False)
+    
+    # Cascade Categorization & VAT extensions
+    vat_amount = Column(Float, nullable=True)
+    vat_flag = Column(Integer, nullable=True)  # 0: non-taxable / НДС не облагается, 1: taxable / без налога (НДС)
+    is_cash_gap_critical = Column(Boolean, default=False)
     
     company = relationship("Company", back_populates="operations")
     category = relationship("Category", back_populates="operations")

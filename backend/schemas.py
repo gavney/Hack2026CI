@@ -62,6 +62,11 @@ class CompanyBase(BaseModel):
     tax_regime_confirmed: bool = False
     has_statement: bool = True
     initial_manual_balance: float = 0.0
+    forecast_model: Optional[str] = "ml-ridge-lgbm"
+    forecast_simulations: Optional[int] = 1000
+    forecast_confidence_level: Optional[float] = 0.90
+    ml_categorizer_threshold: Optional[float] = 0.60
+    gigachat_enabled: Optional[bool] = False
 
 class CompanyCreate(BaseModel):
     name: str
@@ -209,6 +214,9 @@ class OperationOut(BaseModel):
     category_confidence: float = 1.0
     category_source: str = "rule"
     is_duplicate: bool = False
+    vat_amount: Optional[float] = None
+    vat_flag: Optional[int] = None
+    is_cash_gap_critical: bool = False
 
     class Config:
         from_attributes = True
@@ -323,6 +331,24 @@ class ForecastResultOut(BaseModel):
     gap_probability: float = 0.0
     sample_paths: Optional[List[List[float]]] = None
     simulation_meta: Optional[Dict[str, Any]] = None
+
+# --- Minimalist Forecast & ML Settings ---
+class ForecastSettingsOut(BaseModel):
+    forecast_model: str = "ml-ridge-lgbm"
+    forecast_simulations: int = 1000
+    forecast_confidence_level: float = 0.90
+    ml_categorizer_threshold: float = 0.60
+    gigachat_enabled: bool = False
+    gigachat_connected: bool = False
+    available_models: List[str] = ["ml-ridge-lgbm", "monte-carlo", "stub-0.1"]
+
+class ForecastSettingsUpdate(BaseModel):
+    forecast_model: Optional[str] = None
+    forecast_simulations: Optional[int] = None
+    forecast_confidence_level: Optional[float] = None
+    ml_categorizer_threshold: Optional[float] = None
+    gigachat_enabled: Optional[bool] = None
+    gigachat_credentials: Optional[str] = None
 
 # --- Alerts & Breakdown ---
 class ActionRecommendation(BaseModel):

@@ -16,7 +16,7 @@ def next_business_day(d: date) -> date:
 
 def detect_recurring_slots(
     df_ops: pd.DataFrame,
-    window_days: int = 120,
+    window_days: int = 270,
     min_share_months: float = 0.60
 ) -> List[Dict[str, Any]]:
     """
@@ -59,40 +59,50 @@ def detect_recurring_slots(
 
     detected_slots = []
 
-    # Group by category and counterparty
+    # Group by category and counterparty, then cluster by day-of-month (FR-3.1, FIX16)
     grouped = window_df.groupby(['category_id', 'counterparty_inn', 'counterparty_name'])
 
     for (cat_id, inn, name), group in grouped:
-        # Cluster days: find the modal day or day clusters
-        days = group['day'].values
-        if len(days) == 0:
+        if len(group) == 0:
             continue
 
-        # Simple 3-day clustering around median day
-        median_day = int(np.median(days))
-        
-        # Check presence per month
-        months_with_op = group['year_month'].nunique()
-        share = months_with_op / max(1, total_months)
+        sorted_group = group.sort_values('day').copy()
+        # Separate operations into day clusters if distance between distinct days exceeds 5 calendar days
+        # E.g. day 15 (advance) and day 30 (salary settlement) form 2 distinct regular recurring slots
+        day_diffs = sorted_group['day'].diff()
+        cluster_ids = (day_diffs > 5).cumsum()
 
-        if share >= min_share_months or (cat_id == 'cat_tax_enp' and share >= 0.5):
-            # Special case for ENP (28th of every month)
+        for _, cluster_df in sorted_group.groupby(cluster_ids):
+            c_days = cluster_df['day'].values
+            if len(c_days) == 0:
+                continue
+
+            median_day = int(np.median(c_days))
+            months_with_op = cluster_df['year_month'].nunique()
+            share = months_with_op / max(1, total_months)
+
+            # Special case for ENP (28th of month)
             if cat_id == 'cat_tax_enp':
-                median_day = 28
+                if 25 <= median_day <= 31:
+                    median_day = 28
+                is_eligible = (share >= 0.40)
+            else:
+                is_eligible = (share >= min_share_months)
 
-            typical_amount = float(group.groupby('year_month')['amount'].sum().median())
-            
-            detected_slots.append({
-                "category_id": cat_id,
-                "counterparty_inn": str(inn) if inn else "",
-                "counterparty_name": str(name) if name else "",
-                "direction": "Списание",
-                "day_of_month": int(median_day),
-                "typical_amount": round(typical_amount, 2),
-                "share_of_months": round(float(share), 2),
-                "confirmed_by_user": True,
-                "is_active": True
-            })
+            if is_eligible:
+                typical_amount = float(cluster_df.groupby('year_month')['amount'].median().median())
+
+                detected_slots.append({
+                    "category_id": cat_id,
+                    "counterparty_inn": str(inn) if inn else "",
+                    "counterparty_name": str(name) if name else "",
+                    "direction": "Списание",
+                    "day_of_month": int(median_day),
+                    "typical_amount": round(typical_amount, 2),
+                    "share_of_months": round(float(share), 2),
+                    "confirmed_by_user": True,
+                    "is_active": True
+                })
 
     return detected_slots
 

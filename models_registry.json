@@ -1,0 +1,91 @@
+{
+  "models": {
+    "ML_v2_Canonical": {
+      "model_version": "ml-v2.0-canonical",
+      "commit_hash": "711f04b",
+      "seed": 42,
+      "feature_count": 27,
+      "feature_hash": "b7b9aa2e",
+      "features": [
+        "lag_1", "lag_2", "lag_3", "lag_7", "lag_14", "lag_21", "lag_28",
+        "mean_7", "mean_28", "std_28", "horizon_h",
+        "is_weekend", "rent_win", "adv_win", "tax_win", "m_end_win",
+        "sin_day", "cos_day", "dow_0", "dow_1", "dow_2", "dow_3", "dow_4", "dow_5", "dow_6",
+        "min_dist_slot", "is_slot_near"
+      ],
+      "parameters": {
+        "engine": "HybridMLForecaster",
+        "model_type": "Direct Multi-Step Ridge Regression",
+        "ridge_alpha": 15.0,
+        "step_grid": [1, 2, 3, 5, 7, 10, 14, 21, 28, 30],
+        "uncertainty_engine": "Walk-forward block bootstrap",
+        "n_simulations": 1000,
+        "block_len": 7,
+        "idle_threshold_days": 5,
+        "owner_operation_filter": true,
+        "slots_as_events": false
+      }
+    },
+    "Old_ML": {
+      "model_version": "ml-v1.0-legacy",
+      "commit_hash": "296ace8",
+      "seed": 42,
+      "feature_count": 26,
+      "feature_hash": "5345a2a5",
+      "features": [
+        "lag_1", "lag_2", "lag_3", "lag_7", "lag_14", "lag_21", "lag_28",
+        "mean_7", "mean_28", "std_28",
+        "is_weekend", "rent_win", "adv_win", "tax_win", "m_end_win",
+        "sin_day", "cos_day", "dow_0", "dow_1", "dow_2", "dow_3", "dow_4", "dow_5", "dow_6",
+        "min_dist_slot", "is_slot_near"
+      ],
+      "parameters": {
+        "model_type": "Recursive Ridge + LightGBM Quantile Cumsum",
+        "ridge_alpha": 10.0,
+        "lgbm_quantiles": [0.10, 0.90],
+        "lgbm_n_estimators": 50,
+        "lgbm_num_leaves": 15,
+        "lgbm_learning_rate": 0.08,
+        "trajectory_simulation": "Gaussian Process with Brownian correlation R(s,t)=min(s,t)/sqrt(st)",
+        "owner_operation_filter": false,
+        "slots_as_events": true
+      }
+    },
+    "Monte_Carlo": {
+      "model_version": "monte-carlo-v1.0",
+      "commit_hash": "711f04b",
+      "seed": 42,
+      "parameters": {
+        "engine": "MonteCarloForecaster",
+        "n_simulations": 1000,
+        "n_sample_paths": 5,
+        "resampling_pool": "historical daily flows by day_of_week",
+        "owner_operation_filter": true
+      }
+    },
+    "Corridor_v01": {
+      "model_version": "stub-0.1",
+      "commit_hash": "711f04b",
+      "parameters": {
+        "engine": "ForecasterStubV01",
+        "k_factor": 1.28155,
+        "lookback_days": 90,
+        "corridor_scaling": "sqrt(h)",
+        "trajectory_simulation": "Gaussian Process Brownian motion with drift"
+      }
+    },
+    "Naive": {
+      "model_version": "baseline-naive-v1.0",
+      "parameters": {
+        "rule": "B(t) = B0",
+        "p_any": "1.0 if B0 < 0 else 0.0"
+      }
+    },
+    "Always_Alert": {
+      "model_version": "baseline-always-alert-v1.0",
+      "parameters": {
+        "rule": "Always alarm (P_any = 1.0 everywhere, uncalibrated)"
+      }
+    }
+  }
+}

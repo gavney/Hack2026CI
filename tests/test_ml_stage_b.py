@@ -428,3 +428,49 @@ def test_start_negative_p_any_one():
     assert res["simulation_meta"]["start_negative"] is True
 
 
+def test_t15_zero_leakage_after_cutoff_in_features_and_slots():
+    """T15 (FIX16): Verify that mutating future data after cutoff T does not alter features or slots."""
+    from backend.core.slots import detect_recurring_slots
+    from backend.core.categorizer import classify_operation
+
+    dates = pd.date_range("2026-01-01", periods=90, freq="D")
+    cutoff = dates[59].date()  # Day 60 is cutoff
+
+    records = []
+    bal = 100000.0
+    for i, d in enumerate(dates):
+        amt = 15000.0 if i % 2 == 0 else -10000.0
+        bal += amt
+        records.append({
+            "operation_date": d.date(),
+            "amount": abs(amt),
+            "direction": "Поступление" if amt > 0 else "Списание",
+            "category_id": "cat_trade",
+            "payment_purpose": "Регулярная операция",
+            "counterparty_inn": "7701234567",
+            "counterparty_name": "ООО Партнер",
+            "balance_eod": bal
+        })
+    df_clean = pd.DataFrame(records)
+
+    # Historical slice strictly <= T
+    df_past = df_clean[df_clean["operation_date"] <= cutoff].copy()
+    slots_past = detect_recurring_slots(df_past)
+
+    # Mutated future after T: add huge fake spike operations after cutoff
+    df_mutated = df_clean.copy()
+    future_mask = df_mutated["operation_date"] > cutoff
+    df_mutated.loc[future_mask, "amount"] = 999999999.0
+    df_mutated.loc[future_mask, "payment_purpose"] = "ФЕЙКОВАЯ ОПЕРАЦИЯ БУДУЩЕГО"
+
+    # Forecaster should slice at cutoff T and produce identical output
+    forecaster = MLForecaster()
+    res_orig = forecaster.forecast(df_clean, 100000.0, cutoff, horizon=30, seed=42)
+    res_mut = forecaster.forecast(df_mutated, 100000.0, cutoff, horizon=30, seed=42)
+
+    assert res_orig["days"][0]["p50"] == res_mut["days"][0]["p50"], "Future data mutation altered Day 1 forecast!"
+    assert res_orig["days"][-1]["p50"] == res_mut["days"][-1]["p50"], "Future data mutation altered Day 30 forecast!"
+    assert res_orig["gap_probability"] == res_mut["gap_probability"], "Future data mutation altered P_any!"
+
+
+

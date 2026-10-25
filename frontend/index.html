@@ -439,7 +439,23 @@
             <p class="text-xs text-slate-400">Медианная траектория и коридор неопределенности P10–P90</p>
           </div>
 
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <!-- Model Selector -->
+            <div class="flex items-center space-x-1.5 text-xs font-bold text-slate-500">
+              <span>Модель:</span>
+              <div id="modelSwitcher" class="inline-flex bg-slate-100 p-1 rounded-xl gap-1">
+                <button onclick="setModel('ml-ridge-lgbm')" id="model-btn-ml" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white shadow-sm transition flex items-center gap-1 text-[11px] font-bold">
+                  <span>⚡ ML-модель</span>
+                </button>
+                <button onclick="setModel('monte-carlo')" id="model-btn-mc" class="px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center gap-1 text-[11px]">
+                  <span>🎲 Монте-Карло</span>
+                </button>
+                <button onclick="setModel('stub-0.1')" id="model-btn-stub" class="px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center gap-1 text-[11px]">
+                  <span>📊 Коридор v0.1</span>
+                </button>
+              </div>
+            </div>
+
             <!-- Horizon Selector -->
             <div class="flex items-center space-x-1.5 text-xs font-bold text-slate-500">
               <span>Период:</span>
@@ -450,12 +466,8 @@
               </div>
             </div>
 
-            <!-- Hidden container to preserve JS elements without visual clutter -->
+            <!-- Hidden container to preserve debug labels -->
             <div class="hidden">
-              <div id="modelSwitcher">
-                <button id="model-btn-mc"></button>
-                <button id="model-btn-stub"></button>
-              </div>
               <input type="checkbox" id="debugModeToggle">
               <div id="debugBanner">
                 <span id="debugModelLabel"></span>
@@ -3328,6 +3340,6 @@
     <span id="toastMessage">Сохранено</span>
   </div>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=2.1"></script>
 </body>
 </html>

@@ -7,8 +7,8 @@ import uuid
 
 from backend.database import get_db
 from backend.models import Company, Operation, Slot, Event, Forecast, ForecastDay, Alert, Scenario, Counterparty
-from backend.schemas import ForecastResultOut, AlertOut
-from backend.core.forecaster import ForecasterStubV01, MonteCarloForecaster
+from backend.schemas import ForecastResultOut, AlertOut, ForecastSettingsOut, ForecastSettingsUpdate
+from backend.core.forecaster import ForecasterStubV01, MonteCarloForecaster, MLForecaster
 from backend.core.risk import evaluate_cash_gap
 from backend.core.slots import next_business_day
 
@@ -16,10 +16,74 @@ router = APIRouter(tags=["Прогнозирование и Риски"])
 
 # --- Pluggable Forecaster Registry ---
 FORECASTER_REGISTRY = {
-    "stub-0.1": ForecasterStubV01(k_factor=1.28),
+    "ml-ridge-lgbm": MLForecaster(),
     "monte-carlo": MonteCarloForecaster(n_simulations=1000, n_sample_paths=5),
+    "stub-0.1": ForecasterStubV01(k_factor=1.28),
 }
-DEFAULT_MODEL = "monte-carlo"
+DEFAULT_MODEL = "ml-ridge-lgbm"
+
+
+@router.get("/companies/{company_id}/forecast-settings", response_model=ForecastSettingsOut)
+def get_forecast_settings(company_id: str, db: Session = Depends(get_db)):
+    comp = db.query(Company).filter(Company.id == company_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    
+    from backend.core.ai_categorizer import gigachat_client
+    is_connected = gigachat_client.is_available()
+
+    return ForecastSettingsOut(
+        forecast_model=comp.forecast_model or DEFAULT_MODEL,
+        forecast_simulations=comp.forecast_simulations or 1000,
+        forecast_confidence_level=comp.forecast_confidence_level or 0.90,
+        ml_categorizer_threshold=comp.ml_categorizer_threshold or 0.60,
+        gigachat_enabled=bool(comp.gigachat_enabled),
+        gigachat_connected=is_connected,
+        available_models=list(FORECASTER_REGISTRY.keys())
+    )
+
+
+@router.patch("/companies/{company_id}/forecast-settings", response_model=ForecastSettingsOut)
+def update_forecast_settings(
+    company_id: str,
+    payload: ForecastSettingsUpdate,
+    db: Session = Depends(get_db)
+):
+    comp = db.query(Company).filter(Company.id == company_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    if payload.forecast_model is not None:
+        if payload.forecast_model not in FORECASTER_REGISTRY:
+            raise HTTPException(status_code=400, detail=f"Недопустимая модель прогноза. Доступные: {list(FORECASTER_REGISTRY.keys())}")
+        comp.forecast_model = payload.forecast_model
+
+    if payload.forecast_simulations is not None:
+        comp.forecast_simulations = max(100, min(10000, payload.forecast_simulations))
+    if payload.forecast_confidence_level is not None:
+        comp.forecast_confidence_level = max(0.50, min(0.99, payload.forecast_confidence_level))
+    if payload.ml_categorizer_threshold is not None:
+        comp.ml_categorizer_threshold = max(0.30, min(0.95, payload.ml_categorizer_threshold))
+    if payload.gigachat_enabled is not None:
+        comp.gigachat_enabled = payload.gigachat_enabled
+    if payload.gigachat_credentials is not None:
+        comp.gigachat_credentials = payload.gigachat_credentials
+
+    db.commit()
+    db.refresh(comp)
+
+    from backend.core.ai_categorizer import gigachat_client
+    is_connected = gigachat_client.is_available()
+
+    return ForecastSettingsOut(
+        forecast_model=comp.forecast_model,
+        forecast_simulations=comp.forecast_simulations,
+        forecast_confidence_level=comp.forecast_confidence_level,
+        ml_categorizer_threshold=comp.ml_categorizer_threshold,
+        gigachat_enabled=bool(comp.gigachat_enabled),
+        gigachat_connected=is_connected,
+        available_models=list(FORECASTER_REGISTRY.keys())
+    )
 
 
 @router.get("/companies/{company_id}/forecast", response_model=ForecastResultOut)
@@ -27,16 +91,21 @@ def get_company_forecast(
     company_id: str,
     horizon: int = Query(30, ge=7, le=90),
     scenario_id: Optional[str] = None,
-    model: str = Query(DEFAULT_MODEL, description="Forecasting model: monte-carlo | stub-0.1"),
+    model: Optional[str] = Query(None, description="Forecasting model: ml-ridge-lgbm | monte-carlo | stub-0.1"),
     db: Session = Depends(get_db)
 ):
-    if not isinstance(model, str):
-        model = DEFAULT_MODEL
-    if not isinstance(horizon, int):
-        horizon = 30
     comp = db.query(Company).filter(Company.id == company_id).first()
     if not comp:
         raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    # If model is explicitly passed in query string, honor it! Only fall back to company setting if omitted.
+    if not model:
+        model = comp.forecast_model or DEFAULT_MODEL
+    elif model not in FORECASTER_REGISTRY:
+        model = DEFAULT_MODEL
+
+    if not isinstance(horizon, int):
+        horizon = 30
 
     # Fetch last operations to determine as_of and balance
     ops = db.query(Operation).filter(Operation.company_id == company_id).order_by(Operation.operation_date).all()
@@ -46,7 +115,10 @@ def get_company_forecast(
             "amount": op.amount,
             "direction": op.direction,
             "category_id": op.category_id,
-            "balance_eod": op.balance_eod
+            "balance_eod": op.balance_eod,
+            "payment_purpose": op.payment_purpose,
+            "counterparty_name": op.counterparty_name,
+            "counterparty_inn": op.counterparty_inn
         } for op in ops]
         history_df = pd.DataFrame(history_records)
         last_op = ops[-1]
@@ -178,14 +250,20 @@ def get_company_forecast(
                     break
 
     # 4. Select forecasting model from registry
-    forecaster = FORECASTER_REGISTRY.get(model)
-    if not forecaster:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Неизвестная модель: {model}. Доступные: {', '.join(FORECASTER_REGISTRY.keys())}"
+    if model == "monte-carlo":
+        forecaster = MonteCarloForecaster(
+            n_simulations=comp.forecast_simulations or 1000,
+            n_sample_paths=5
         )
+    elif model == "ml-ridge-lgbm":
+        forecaster = MLForecaster()
+    elif model == "stub-0.1":
+        forecaster = ForecasterStubV01(k_factor=1.28)
+    else:
+        forecaster = FORECASTER_REGISTRY.get(model, MLForecaster())
 
     # Execute Forecast
+    eff_overdraft = float(comp.overdraft_limit or 0.0)
     result = forecaster.forecast(
         history=history_df,
         balance_as_of=balance_as_of,
@@ -193,7 +271,7 @@ def get_company_forecast(
         horizon=horizon,
         events=events_payload,
         scenario=scenario_dict,
-        overdraft_limit=0.0,
+        overdraft_limit=eff_overdraft,
         seed=42
     )
 
@@ -205,7 +283,7 @@ def get_company_forecast(
     gap_eval = evaluate_cash_gap(
         forecast_result=result,
         mandatory_slots=slots_dicts,
-        overdraft_limit=0.0
+        overdraft_limit=eff_overdraft
     )
 
     if gap_eval:
