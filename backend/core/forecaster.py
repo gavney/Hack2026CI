@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from datetime import date, timedelta
 from typing import List, Dict, Any, Optional, Protocol, Set, Tuple
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import TimeSeriesSplit
 from backend.core.slots import is_business_day, next_business_day
 
 class Forecaster(Protocol):
@@ -687,7 +689,7 @@ def extract_calendar_features(dt: pd.Timestamp) -> List[float]:
     days_in_month = dt.days_in_month
     is_month_end_workday = 0.0
     if is_workday:
-        rem_workdays = sum(1 for k in range(1, days_in_month - day + 1) if (dt + pd.Timedelta(days=k)).day_of_week < 5)
+        rem_workdays = sum(1 for k in range(1, days_in_month - day + 1) if (dow + k) % 7 < 5)
         if rem_workdays <= 1:
             is_month_end_workday = 1.0
 
@@ -858,21 +860,20 @@ class MLForecaster:
             X_arr = np.asarray(X, dtype=float)
             y_arr = np.asarray(y, dtype=float)
 
-            # Walk-forward residuals
-            n_chunks = 4
-            chunk_sz = len(X_arr) // (n_chunks + 1)
-            for s in range(1, n_chunks + 1):
-                tr_end = s * chunk_sz
-                te_end = min(len(X_arr), (s + 1) * chunk_sz)
-                if tr_end >= 20 and tr_end < te_end:
+            # FIX22: True Walk-Forward Out-Of-Sample Residuals (TimeSeriesSplit 5-fold)
+            from sklearn.model_selection import TimeSeriesSplit
+            oof_residuals = []
+            if len(X_arr) >= 30:
+                tscv = TimeSeriesSplit(n_splits=5)
+                for tr_idx, te_idx in tscv.split(X_arr):
                     fm = Ridge(alpha=self.ridge_alpha, random_state=seed)
-                    fm.fit(X_arr[:tr_end], y_arr[:tr_end])
-                    oof_residuals.extend((y_arr[tr_end:te_end] - fm.predict(X_arr[tr_end:te_end])).tolist())
+                    fm.fit(X_arr[tr_idx], y_arr[tr_idx])
+                    oof_residuals.extend((y_arr[te_idx] - fm.predict(X_arr[te_idx])).tolist())
 
             ridge_model = Ridge(alpha=self.ridge_alpha, random_state=seed)
             ridge_model.fit(X_arr, y_arr)
 
-            if not oof_residuals:
+            if not oof_residuals or len(oof_residuals) < 20:
                 oof_residuals = (y_arr - ridge_model.predict(X_arr)).tolist()
 
             # Frozen lags at cutoff T (B2 direct forecast)
@@ -932,21 +933,25 @@ class MLForecaster:
         N_sims = self.n_simulations
         L = self.block_len
         n_res = len(residuals_pool)
-        if n_res >= L:
-            resid_blocks = [residuals_pool[i:i+L] for i in range(n_res - L + 1)]
-        else:
-            resid_blocks = [residuals_pool]
+        n_blocks = int(math.ceil(horizon / L))
+        max_start = max(1, n_res - L)
 
-        num_blocks_needed = math.ceil(horizon / L)
-        sim_paths = np.zeros((N_sims, horizon), dtype=float)
+        sampled_blocks = np.zeros((N_sims, n_blocks * L), dtype=float)
+        for s in range(N_sims):
+            starts = rng.integers(0, max_start, size=n_blocks)
+            blks = [residuals_pool[st:st + L] for st in starts]
+            sampled_blocks[s, :] = np.concatenate(blks)
 
-        for i in range(N_sims):
-            sampled_blks = [resid_blocks[rng.integers(0, len(resid_blocks))] for _ in range(num_blocks_needed)]
-            noise = np.concatenate(sampled_blks)[:horizon]
-            for d_idx, f_dt in enumerate(future_dates):
-                if f_dt.day_of_week >= 5:
-                    noise[d_idx] = 0.0
-            sim_paths[i, :] = balance_as_of + np.cumsum(total_mean_flows + noise)
+        sampled_res = sampled_blocks[:, :horizon]
+        sim_flows = ml_p50_flows + sampled_res
+
+        # Weekend variance muting
+        for h in range(horizon):
+            dt = future_dates[h]
+            if dt.day_of_week >= 5:
+                sim_flows[:, h] = 0.0
+
+        sim_paths = balance_as_of + np.cumsum(sim_flows + event_vector, axis=1)
 
         p10_arr = np.percentile(sim_paths, 10, axis=0)
         p50_arr = ml_p50_balances
@@ -1022,9 +1027,9 @@ class MLForecaster:
         t_elapsed = time.perf_counter() - t_start
 
         simulation_meta = {
-            "engine": "ml-ridge-lgbm",
-            "model_version": "ml-direct-bootstrap-v2.0",
-            "features_count": 21,
+            "engine": "ml-v2.0-canonical",
+            "model_version": "ml-v2.0-canonical",
+            "features_count": 27,
             "horizon_days": horizon,
             "execution_time_ms": round(t_elapsed * 1000, 2),
             "var_95": round(var_95, 2),
@@ -1039,7 +1044,7 @@ class MLForecaster:
         }
 
         return {
-            "model_version": "ml-ridge-lgbm-v1.0",
+            "model_version": "ml-v2.0-canonical",
             "quality": "high" if N >= 30 else "medium",
             "as_of": as_of,
             "horizon": horizon,

@@ -473,4 +473,70 @@ def test_t15_zero_leakage_after_cutoff_in_features_and_slots():
     assert res_orig["gap_probability"] == res_mut["gap_probability"], "Future data mutation altered P_any!"
 
 
+def test_t16_endpoint_and_offline_exact_match_1e6():
+    """T16 (FIX19): Endpoint and offline forecast match within 1e-6 tolerance on C004."""
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.database import SessionLocal
+    from backend.models import Operation
+
+    client = TestClient(app)
+    resp = client.get("/api/companies/C004/forecast?horizon=90&model=ml-v2.0-canonical")
+    assert resp.status_code == 200
+    data_api = resp.json()
+    assert data_api["model_version"] == "ml-v2.0-canonical"
+
+    p10_api = np.array([d["p10"] for d in data_api["days"]])
+    p50_api = np.array([d["p50"] for d in data_api["days"]])
+    p90_api = np.array([d["p90"] for d in data_api["days"]])
+
+    db = SessionLocal()
+    ops = db.query(Operation).filter(Operation.company_id == "C004").order_by(Operation.operation_date).all()
+    history_records = [{
+        "operation_date": op.operation_date,
+        "amount": op.amount,
+        "direction": op.direction,
+        "category_id": op.category_id,
+        "balance_eod": op.balance_eod,
+        "payment_purpose": op.payment_purpose,
+        "counterparty_name": op.counterparty_name,
+        "counterparty_inn": op.counterparty_inn
+    } for op in ops]
+    df = pd.DataFrame(history_records)
+    last_op = ops[-1]
+
+    forecaster = MLForecaster()
+    res_off = forecaster.forecast(df, float(last_op.balance_eod), last_op.operation_date, horizon=90, seed=42)
+    assert res_off["model_version"] == "ml-v2.0-canonical"
+
+    p10_off = np.array([d["p10"] for d in res_off["days"]])
+    p50_off = np.array([d["p50"] for d in res_off["days"]])
+    p90_off = np.array([d["p90"] for d in res_off["days"]])
+
+    assert np.allclose(p10_api, p10_off, atol=1e-6), f"P10 mismatch: max diff {np.max(np.abs(p10_api - p10_off))}"
+    assert np.allclose(p50_api, p50_off, atol=1e-6), f"P50 mismatch: max diff {np.max(np.abs(p50_api - p50_off))}"
+    assert np.allclose(p90_api, p90_off, atol=1e-6), f"P90 mismatch: max diff {np.max(np.abs(p90_api - p90_off))}"
+
+
+def test_t17_c004_slots_medians():
+    """T17 (FIX21): Verified recurring slots for C004 match exact medians of last 6 payments."""
+    import sqlite3
+    conn = sqlite3.connect("radar.db")
+    df_slots = pd.read_sql_query("SELECT category_id, day_of_month, typical_amount FROM slots WHERE company_id = 'C004' ORDER BY day_of_month", conn)
+    
+    slots_map = {(r["category_id"], int(r["day_of_month"])): float(r["typical_amount"]) for _, r in df_slots.iterrows()}
+    
+    # 1. Rent on 2nd: 160,000.00 RUB
+    assert abs(slots_map.get(("cat_rent_utilities", 2), 0.0) - 160000.00) < 1.0
+    # 2. POS fee on 3rd: 1,500.00 RUB
+    assert abs(slots_map.get(("cat_rent_utilities", 3), 0.0) - 1500.00) < 1.0
+    # 3. Payroll advance on 15th: 180,000.00 RUB
+    assert abs(slots_map.get(("cat_payroll", 15), 0.0) - 180000.00) < 1.0
+    # 4. ENP tax on 28th: 174,821.00 RUB
+    assert abs(slots_map.get(("cat_tax_enp", 28), 0.0) - 174821.00) < 1.0
+    # 5. Payroll settlement on 30th: 270,013.81 RUB
+    assert abs(slots_map.get(("cat_payroll", 30), 0.0) - 270013.81) < 1.0
+
+
+
 

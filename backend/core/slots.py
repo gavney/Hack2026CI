@@ -90,7 +90,17 @@ def detect_recurring_slots(
                 is_eligible = (share >= min_share_months)
 
             if is_eligible:
-                typical_amount = float(cluster_df.groupby('year_month')['amount'].median().median())
+                # FIX21: Compute typical amount as median of last 6 real payments
+                sorted_by_date = cluster_df.sort_values('operation_date')
+                if cat_id == 'cat_tax_enp':
+                    # Filter out small penalties/fines (< 50,000 RUB) to capture true monthly tax liability (168k-375k)
+                    major_ops = sorted_by_date[sorted_by_date['amount'] >= 50000.0]
+                    target_ops = major_ops if len(major_ops) >= 3 else sorted_by_date
+                else:
+                    target_ops = sorted_by_date
+
+                last_6_ops = target_ops.tail(6)
+                typical_amount = float(round(float(np.median(last_6_ops['amount'].values)), 2))
 
                 detected_slots.append({
                     "category_id": cat_id,

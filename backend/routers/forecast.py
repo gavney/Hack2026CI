@@ -16,11 +16,13 @@ router = APIRouter(tags=["Прогнозирование и Риски"])
 
 # --- Pluggable Forecaster Registry ---
 FORECASTER_REGISTRY = {
+    "ml-v2.0-canonical": MLForecaster(),
     "ml-ridge-lgbm": MLForecaster(),
+    "ml": MLForecaster(),
     "monte-carlo": MonteCarloForecaster(n_simulations=1000, n_sample_paths=5),
     "stub-0.1": ForecasterStubV01(k_factor=1.28),
 }
-DEFAULT_MODEL = "ml-ridge-lgbm"
+DEFAULT_MODEL = "ml-v2.0-canonical"
 
 
 @router.get("/companies/{company_id}/forecast-settings", response_model=ForecastSettingsOut)
@@ -255,7 +257,7 @@ def get_company_forecast(
             n_simulations=comp.forecast_simulations or 1000,
             n_sample_paths=5
         )
-    elif model == "ml-ridge-lgbm":
+    elif model in ["ml-v2.0-canonical", "ml-ridge-lgbm", "ml"]:
         forecaster = MLForecaster()
     elif model == "stub-0.1":
         forecaster = ForecasterStubV01(k_factor=1.28)
