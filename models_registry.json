@@ -2,7 +2,7 @@
   "models": {
     "ML_v2_Canonical": {
       "model_version": "ml-v2.0-canonical",
-      "commit_hash": "957d254",
+      "commit_hash": "49ef9cf",
       "seed": 42,
       "code_hash": "b115b957edf7da82",
       "file_hash_forecaster": "e7be30662904cfee",
